@@ -1,6 +1,6 @@
 
 import openpyxl
-from IdlePowerOptimization import Optimizer, UpgradeManager, Resource
+from IdlePowerOptimization import Optimizer, UpgradeManager, Resource, PowerValue
 from typing import List, Optional
 
 
@@ -17,6 +17,9 @@ class DataLoader:
         self.demand_multi_unlock_factors = list()
         self.demand_multi_unlock_thresholds = list()
         self.demand_multi_upgrade_manager = UpgradeManager()
+        self.power_value = PowerValue()
+        self.power_value_upgrade_manager = UpgradeManager()
+
         self.optimizer = Optimizer()
 
         self.wb = openpyxl.load_workbook(filename="IdlePowerBalancing.xlsx", data_only=True)
@@ -32,6 +35,8 @@ class DataLoader:
         self.demand_manual_upgrades_sheet_name = 'demand_manual_upgrades'
         self.demand_multi_sheet_name = 'demand_multi'
 
+        self.power_value_sheet_name = 'power_value'
+
     def load_optimizer(self):
         # type: () -> Optimizer
         self.production_resources = self.load_prod_resources()
@@ -44,6 +49,9 @@ class DataLoader:
         self.demand_multi_upgrade_manager = self.load_multi_demand_upgrade_manager()
         self.demand_multi_unlock_thresholds, self.demand_multi_unlock_factors = self.load_multi_demand_unlocks()
 
+        self.power_value = self.load_power_value()
+        self.power_value_upgrade_manager = self.load_power_value_upgrade_manager()
+
         optimizer = Optimizer()
         optimizer.prod_resources = self.production_resources
         optimizer.demand_resources = self.demand_resources
@@ -55,6 +63,8 @@ class DataLoader:
         optimizer.demandMultiUnlockThresholds = self.demand_multi_unlock_thresholds
         optimizer.demand_upgrade_managers = self.demand_upgrade_managers
         optimizer.demandMultiUpgrades = self.demand_multi_upgrade_manager
+        optimizer.power_value_upgrade_manager = self.power_value_upgrade_manager
+        optimizer.power_value = self.power_value
 
         return optimizer
 
@@ -187,6 +197,22 @@ class DataLoader:
         ws = self.wb[self.demand_multi_sheet_name]
         costs = [0] + [row[2].value for row in ws.iter_rows(min_row=4)]
         base_factors = [row[3].value for row in ws.iter_rows(min_row=4)]
+        factors = self.cumulative_factors(base_factors)
+        return self.make_upgrade_manager(costs, factors)
+
+    def load_power_value(self):
+        ws = self.wb[self.power_value_sheet_name]
+        power_value = PowerValue()
+        power_value.amount_growth_rate = ws["C5"].value
+        power_value.amount_second_growth_rate = ws["D5"].value
+        power_value.base_cost = ws["E5"].value
+        power_value.cost_growth_rate = ws["F5"].value
+        return power_value
+
+    def load_power_value_upgrade_manager(self):
+        ws = self.wb[self.power_value_sheet_name]
+        costs = [0] + [row[0].value for row in ws.iter_rows(min_row=4)]
+        base_factors = [row[1].value for row in ws.iter_rows(min_row=4)]
         factors = self.cumulative_factors(base_factors)
         return self.make_upgrade_manager(costs, factors)
 

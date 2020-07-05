@@ -27,6 +27,8 @@ class Optimizer:
         self.demandMultiUpgrades = UpgradeManager()
         self.prod_upgrade_managers = list()  # type: List[UpgradeManager]
         self.demand_upgrade_managers = list()  # type: List[UpgradeManager]
+        self.power_value = PowerValue()
+        self.power_value_upgrade_manager = UpgradeManager()
 
     def run_optimization(self, num_steps):
         for i in range(num_steps):
@@ -42,22 +44,49 @@ class Optimizer:
     def improve_prod(self):
         (count_index, count_score) = self.max_prod_resource_score()
         (upgrade_index, upgrade_score) = self.max_prod_upgrade_score()
-        if upgrade_score >= count_score:
+        power_value_score = self.power_value_score()
+        power_value_upgrade_score = self.power_value_upgrade_score()
+
+        max_score = max(count_score, upgrade_score, power_value_score, power_value_upgrade_score)
+
+        if upgrade_score == max_score:
             self.stat_tracker.update_time(self.prod_upgrade_managers[upgrade_index].current_cost(), self)
             self.prod_upgrade_managers[upgrade_index].make_purchase()
-        else:
+        elif count_score == max_score:
             self.stat_tracker.update_time(self.prod_resources[count_index].cost(), self)
             self.prod_resources[count_index].make_purchase()
+        elif power_value_score == max_score:
+            self.make_power_value_purchase()
+        elif power_value_upgrade_score == max_score:
+            self.make_power_value_upgrade_purchase()
 
     def improve_demand(self):
         (count_index, count_score) = self.max_demand_resource_score()
         (upgrade_index, upgrade_score) = self.max_demand_upgrade_score()
-        if upgrade_score >= count_score:
+        power_value_score = self.power_value_score()
+        power_value_upgrade_score = self.power_value_upgrade_score()
+
+        max_score = max(upgrade_score, count_score, power_value_score, power_value_upgrade_score)
+
+        if upgrade_score == max_score:
             self.stat_tracker.update_time(self.demand_upgrade_managers[upgrade_index].current_cost(), self)
             self.demand_upgrade_managers[upgrade_index].make_purchase()
-        else:
+        elif count_score == max_score:
             self.stat_tracker.update_time(self.demand_resources[count_index].cost(), self)
             self.demand_resources[count_index].make_purchase()
+        elif power_value_score == max_score:
+            self.make_power_value_purchase()
+        elif power_value_upgrade_score == max_score:
+            self.make_power_value_upgrade_purchase()
+
+    def make_power_value_purchase(self):
+        self.stat_tracker.update_time(self.power_value.cost(), self)
+        self.power_value.make_purchase()
+
+    def make_power_value_upgrade_purchase(self):
+            self.stat_tracker.update_time(self.power_value_upgrade_manager.current_cost(), self)
+            self.power_value_upgrade_manager.make_purchase()
+
 
     def total_prod_income(self):
         total = 0
@@ -76,7 +105,10 @@ class Optimizer:
         return total
 
     def total_income(self):
-        return min(self.total_demand_income(), self.total_prod_income())
+        return min(self.total_demand_income(), self.total_prod_income())*self.income_multiplier()
+
+    def income_multiplier(self):
+        return self.power_value.factor()*self.power_value_upgrade_manager.current_factor()
 
     def max_prod_resource_score(self):
         index = 0
@@ -86,7 +118,7 @@ class Optimizer:
             cost = resource.cost()
             current_increment_value = resource.increment()
             increment_value_if_purchased = resource.increment_if_purchased()
-            score = (increment_value_if_purchased - current_increment_value) / cost
+            score = (increment_value_if_purchased - current_increment_value) * self.income_multiplier() / cost
 
             if score > max_score:
                 max_score = score
@@ -104,7 +136,7 @@ class Optimizer:
             cost = upgrade_manager.next_cost()
             current_factor = upgrade_manager.current_factor()
             next_factor = upgrade_manager.next_factor()
-            score = resource_increment * (next_factor/current_factor - 1) / cost
+            score = resource_increment * (next_factor/current_factor - 1) * self.income_multiplier() / cost
             if score > max_score:
                 max_score = score
                 max_index = index
@@ -119,7 +151,7 @@ class Optimizer:
             cost = resource.cost()
             current_increment_value = resource.increment()
             increment_value_if_purchased = resource.increment_if_purchased()
-            score = (increment_value_if_purchased - current_increment_value) / cost
+            score = (increment_value_if_purchased - current_increment_value) * self.income_multiplier() / cost
 
             if score > max_score:
                 max_score = score
@@ -137,12 +169,25 @@ class Optimizer:
             cost = upgrade_manager.next_cost()
             current_factor = upgrade_manager.current_factor()
             next_factor = upgrade_manager.next_factor()
-            score = resource_increment * (next_factor/current_factor - 1) / cost
+            score = resource_increment * (next_factor/current_factor - 1) * self.income_multiplier() / cost
             if score > max_score:
                 max_score = score
                 max_index = index
             index = index + 1
         return max_index, max_score
+
+    def power_value_score(self):
+        cost = self.power_value.cost()
+        base_income = self.total_income()
+        improvement_factor = self.power_value.factor_if_purchased()/self.power_value.factor() - 1
+
+        return base_income*improvement_factor / cost
+
+    def power_value_upgrade_score(self):
+        cost = self.power_value_upgrade_manager.next_cost()
+        income = self.total_income()
+        factor = self.power_value_upgrade_manager.next_factor()/self.power_value_upgrade_manager.current_factor() - 1
+        return income * factor / cost
 
 
 class PowerValue:
@@ -159,8 +204,9 @@ class PowerValue:
 
     def cost(self):
         n = self.num_to_purchase()
-        total_cost = self.cost_growth_rate * (1 - self.cost_growth_rate ** (n + self.count - 1)) / (1 - self.cost_growth_rate)
-        previous_cost = self.cost_growth_rate * (1 - self.cost_growth_rate ** (self.count - 1)) / (1 - self.cost_growth_rate)
+        gr = self.cost_growth_rate
+        total_cost = gr * (1 - gr ** (n + self.count - 1)) / (1 - gr)
+        previous_cost = gr * (1 - gr ** (self.count - 1)) / (1 - gr)
         diff_cost = self.base_cost * (total_cost - previous_cost)
         return diff_cost
 
@@ -318,11 +364,13 @@ if __name__ == "__main__":
     data_loader = DataLoader.DataLoader()
     data_loader.load_optimizer()
     opt = data_loader.load_optimizer()
-    opt.run_optimization(1000)
+    print(data_loader.load_power_value())
+
+    opt.run_optimization(1400)
 
     stat_tracker = opt.stat_tracker
 
-    plt.semilogy(stat_tracker.time_hours(), [d/3600 for d in stat_tracker.delta_time])
+    plt.loglog(stat_tracker.time_hours(), stat_tracker.income)
     plt.figure()
 
     time_hours = stat_tracker.time_hours()
@@ -345,17 +393,4 @@ if __name__ == "__main__":
     power_value.amount_second_growth_rate = 200
     power_value.base_cost = 10
 
-    factors = list()
-    costs = list()
-    counts = list()
-    for _ in range(100):
-        factors.append(power_value.factor())
-        costs.append(power_value.cost())
-        counts.append(power_value.count)
-        power_value.make_purchase()
-
-    plt.semilogy(factors)
-    plt.semilogy(costs)
-    # plt.plot(counts)
-    plt.show()
 
