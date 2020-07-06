@@ -55,14 +55,14 @@ class DataLoader:
         optimizer = Optimizer()
         optimizer.prod_resources = self.production_resources
         optimizer.demand_resources = self.demand_resources
-        optimizer.prodMultiUnlockFactors = self.production_multi_unlock_factors
-        optimizer.prodMultiUnlockThresholds = self.production_multi_unlock_thresholds
-        optimizer.prodMultiUpgrades = self.production_multi_upgrade_manager
+        optimizer.prod_multi_unlock_factors = self.production_multi_unlock_factors
+        optimizer.prod_multi_unlock_thresholds = self.production_multi_unlock_thresholds
+        optimizer.prod_multi_upgrades = self.production_multi_upgrade_manager
         optimizer.prod_upgrade_managers = self.production_upgrade_managers
-        optimizer.demandMultiUnlockFactors = self.demand_multi_unlock_factors
-        optimizer.demandMultiUnlockThresholds = self.demand_multi_unlock_thresholds
+        optimizer.demand_multi_unlock_factors = self.demand_multi_unlock_factors
+        optimizer.demand_multi_unlock_thresholds = self.demand_multi_unlock_thresholds
         optimizer.demand_upgrade_managers = self.demand_upgrade_managers
-        optimizer.demandMultiUpgrades = self.demand_multi_upgrade_manager
+        optimizer.demand_multi_upgrades = self.demand_multi_upgrade_manager
         optimizer.power_value_upgrade_manager = self.power_value_upgrade_manager
         optimizer.power_value = self.power_value
 

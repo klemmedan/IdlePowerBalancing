@@ -4,50 +4,55 @@ import math
 import copy
 from typing import List, Optional
 import DataLoader
+import cProfile
 
-purchase_factor = 1.05
+purchase_factor = 1.15
 
 
 class Optimizer:
 
     def __init__(self):
         self.stat_tracker = StatTracker()
-        self.power_value = list()  # type: List[float]
-        self.income = list()  # type: List[float]
-        self.cumulativeProduction = list()  # type: List[float]
-        self.cumulativeIncome = list()  # type: List[float]
 
         self.prod_resources = list()  # type: List[Resource]
         self.demand_resources = list()  # type: List[Resource]
-        self.prodMultiUnlockFactors = list()  # type: List[float]
-        self.prodMultiUnlockThresholds = list()  # type: List[float]
-        self.demandMultiUnlockFactors = list()  # type: List[float]
-        self.demandMultiUnlockThresholds = list()  # type: List[float]
-        self.prodMultiUpgrades = UpgradeManager()
-        self.demandMultiUpgrades = UpgradeManager()
+        self.prod_multi_unlock_factors = list()  # type: List[float]
+        self.prod_multi_unlock_thresholds = list()  # type: List[float]
+        self.demand_multi_unlock_factors = list()  # type: List[float]
+        self.demand_multi_unlock_thresholds = list()  # type: List[float]
+        self.prod_multi_upgrades = UpgradeManager()
+        self.demand_multi_upgrades = UpgradeManager()
         self.prod_upgrade_managers = list()  # type: List[UpgradeManager]
         self.demand_upgrade_managers = list()  # type: List[UpgradeManager]
         self.power_value = PowerValue()
         self.power_value_upgrade_manager = UpgradeManager()
 
+        self.current_demand = 1
+        self.current_prod = 1
+
+        self.prestige_manager = Prestige()
+
     def run_optimization(self, num_steps):
         for i in range(num_steps):
-            prod_income = self.total_prod_income()
-            demand_income = self.total_demand_income()
-            if prod_income < demand_income:
+            self.current_prod = self.total_prod_income()
+            self.current_demand = self.total_demand_income()
+
+            if self.current_prod < self.current_demand:
                 self.improve_prod()
             else:
                 self.improve_demand()
 
             self.stat_tracker.update_stats(self)
+            self.check_prestige()
 
     def improve_prod(self):
         (count_index, count_score) = self.max_prod_resource_score()
         (upgrade_index, upgrade_score) = self.max_prod_upgrade_score()
         power_value_score = self.power_value_score()
         power_value_upgrade_score = self.power_value_upgrade_score()
+        multi_upgrade_score = self.multi_prod_upgrade_score()
 
-        max_score = max(count_score, upgrade_score, power_value_score, power_value_upgrade_score)
+        max_score = max(count_score, upgrade_score, power_value_score, power_value_upgrade_score, multi_upgrade_score)
 
         if upgrade_score == max_score:
             self.stat_tracker.update_time(self.prod_upgrade_managers[upgrade_index].current_cost(), self)
@@ -59,14 +64,18 @@ class Optimizer:
             self.make_power_value_purchase()
         elif power_value_upgrade_score == max_score:
             self.make_power_value_upgrade_purchase()
+        elif multi_upgrade_score == max_score:
+            self.stat_tracker.update_time(self.prod_multi_upgrades.current_cost(), self)
+            self.prod_multi_upgrades.make_purchase()
 
     def improve_demand(self):
         (count_index, count_score) = self.max_demand_resource_score()
         (upgrade_index, upgrade_score) = self.max_demand_upgrade_score()
         power_value_score = self.power_value_score()
         power_value_upgrade_score = self.power_value_upgrade_score()
+        multi_upgrade_score = self.multi_demand_upgrade_score()
 
-        max_score = max(upgrade_score, count_score, power_value_score, power_value_upgrade_score)
+        max_score = max(upgrade_score, count_score, power_value_score, power_value_upgrade_score, multi_upgrade_score)
 
         if upgrade_score == max_score:
             self.stat_tracker.update_time(self.demand_upgrade_managers[upgrade_index].current_cost(), self)
@@ -78,6 +87,9 @@ class Optimizer:
             self.make_power_value_purchase()
         elif power_value_upgrade_score == max_score:
             self.make_power_value_upgrade_purchase()
+        elif multi_upgrade_score == max_score:
+            self.stat_tracker.update_time(self.demand_multi_upgrades.current_cost(), self)
+            self.demand_multi_upgrades.make_purchase()
 
     def make_power_value_purchase(self):
         self.stat_tracker.update_time(self.power_value.cost(), self)
@@ -87,25 +99,22 @@ class Optimizer:
             self.stat_tracker.update_time(self.power_value_upgrade_manager.current_cost(), self)
             self.power_value_upgrade_manager.make_purchase()
 
-
     def total_prod_income(self):
-        total = 0
-        index = 0
-        for resource in self.prod_resources:
-            total = total + resource.increment() * self.prod_upgrade_managers[index].current_factor()
-            index += 1
+        total = sum([self.prod_resources[i].increment() * self.prod_upgrade_managers[i].current_factor()
+                     for i in range(len(self.prod_resources))])
+        total = total * self.prod_multi_upgrades.current_factor() * self.current_prod_multi_unlock_factor()
+        total = total * self.prestige_manager.prod_factor()
         return total
 
     def total_demand_income(self):
-        total = 0
-        index = 0
-        for resource in self.demand_resources:
-            total = total + resource.increment() * self.demand_upgrade_managers[index].current_factor()
-            index += 1
+        total = sum([self.demand_resources[i].increment() * self.demand_upgrade_managers[i].current_factor()
+                     for i in range(len(self.demand_resources))])
+        total = total * self.demand_multi_upgrades.current_factor() * self.current_demand_multi_unlock_factor()
+        total = total * self.prestige_manager.prod_factor()
         return total
 
     def total_income(self):
-        return min(self.total_demand_income(), self.total_prod_income())*self.income_multiplier()
+        return min(self.current_demand, self.current_prod)*self.income_multiplier()
 
     def income_multiplier(self):
         return self.power_value.factor()*self.power_value_upgrade_manager.current_factor()
@@ -119,7 +128,10 @@ class Optimizer:
             current_increment_value = resource.increment()
             increment_value_if_purchased = resource.increment_if_purchased()
             score = (increment_value_if_purchased - current_increment_value) * self.income_multiplier() / cost
-
+            score = score * self.prestige_manager.prod_factor()
+            if self.purchase_will_trigger_prod_multi_unlock(index):
+                multi_factor = self.next_prod_multi_unlock_factor()/self.current_prod_multi_unlock_factor() - 1
+                score = score + multi_factor*self.total_income() / cost
             if score > max_score:
                 max_score = score
                 max_index = index
@@ -137,11 +149,18 @@ class Optimizer:
             current_factor = upgrade_manager.current_factor()
             next_factor = upgrade_manager.next_factor()
             score = resource_increment * (next_factor/current_factor - 1) * self.income_multiplier() / cost
+            score = score * self.prestige_manager.prod_factor()
             if score > max_score:
                 max_score = score
                 max_index = index
             index = index + 1
         return max_index, max_score
+
+    def multi_prod_upgrade_score(self):
+        total_income = self.total_income()
+        cost = self.prod_multi_upgrades.next_cost()
+        factor = self.prod_multi_upgrades.next_factor() / self.prod_multi_upgrades.current_factor() - 1
+        return total_income*factor/cost
 
     def max_demand_resource_score(self):
         index = 0
@@ -152,6 +171,10 @@ class Optimizer:
             current_increment_value = resource.increment()
             increment_value_if_purchased = resource.increment_if_purchased()
             score = (increment_value_if_purchased - current_increment_value) * self.income_multiplier() / cost
+            score = score * self.prestige_manager.demand_factor()
+            if self.purchase_will_trigger_demand_multi_unlock(index):
+                multi_factor = self.next_demand_multi_unlock_factor()/self.current_demand_multi_unlock_factor() - 1
+                score = score + multi_factor*self.total_income() / cost
 
             if score > max_score:
                 max_score = score
@@ -170,11 +193,18 @@ class Optimizer:
             current_factor = upgrade_manager.current_factor()
             next_factor = upgrade_manager.next_factor()
             score = resource_increment * (next_factor/current_factor - 1) * self.income_multiplier() / cost
+            score = score * self.prestige_manager.demand_factor()
             if score > max_score:
                 max_score = score
                 max_index = index
             index = index + 1
         return max_index, max_score
+
+    def multi_demand_upgrade_score(self):
+        total_income = self.total_income()
+        cost = self.demand_multi_upgrades.next_cost()
+        factor = self.demand_multi_upgrades.next_factor() / self.demand_multi_upgrades.current_factor() - 1
+        return total_income*factor/cost
 
     def power_value_score(self):
         cost = self.power_value.cost()
@@ -188,6 +218,81 @@ class Optimizer:
         income = self.total_income()
         factor = self.power_value_upgrade_manager.next_factor()/self.power_value_upgrade_manager.current_factor() - 1
         return income * factor / cost
+
+    def current_demand_multi_unlock_factor(self):
+        min_amount = min([r.amount for r in self.demand_resources])
+        current_unlock_index = [i for i, v in enumerate(self.demand_multi_unlock_thresholds) if v <= min_amount][-1]
+        return self.demand_multi_unlock_factors[current_unlock_index]
+
+    def next_demand_multi_unlock_factor(self):
+        min_amount = min([r.amount for r in self.demand_resources])
+        current_unlock_index = [i for i, v in enumerate(self.demand_multi_unlock_thresholds) if v <= min_amount][-1]
+        if len(self.demand_multi_unlock_factors) > current_unlock_index + 1:
+            return self.demand_multi_unlock_factors[current_unlock_index + 1]
+        else:
+            return self.demand_multi_unlock_factors[current_unlock_index]
+
+    def purchase_will_trigger_demand_multi_unlock(self, resource_index):
+        resource_amount = self.demand_resources[resource_index].amount
+        min_amount = min([r.amount for r in self.demand_resources])
+        if resource_amount > min_amount:
+            return False
+        current_unlock_index = [i for i, v in enumerate(self.demand_multi_unlock_thresholds) if v <= min_amount][-1]
+        if len(self.demand_multi_unlock_thresholds) > current_unlock_index + 1:
+            next_threshold = self.demand_multi_unlock_thresholds[current_unlock_index + 1]
+            num_to_purchase = self.demand_resources[resource_index].num_to_purchase()
+            return resource_amount + num_to_purchase >= next_threshold
+        else:
+            return False
+
+    def current_prod_multi_unlock_factor(self):
+        min_amount = min([r.amount for r in self.prod_resources])
+        current_unlock_index = [i for i, v in enumerate(self.prod_multi_unlock_thresholds) if v <= min_amount][-1]
+        return self.prod_multi_unlock_factors[current_unlock_index]
+
+    def next_prod_multi_unlock_factor(self):
+        min_amount = min([r.amount for r in self.prod_resources])
+        current_unlock_index = [i for i, v in enumerate(self.prod_multi_unlock_thresholds) if v <= min_amount][-1]
+        if len(self.prod_multi_unlock_factors) > current_unlock_index + 1:
+            return self.prod_multi_unlock_factors[current_unlock_index + 1]
+        else:
+            return self.prod_multi_unlock_factors[current_unlock_index]
+
+    def purchase_will_trigger_prod_multi_unlock(self, resource_index):
+        resource_amount = self.prod_resources[resource_index].amount
+        min_amount = min([r.amount for r in self.prod_resources])
+        if resource_amount > min_amount:
+            return False
+        current_unlock_index = [i for i, v in enumerate(self.prod_multi_unlock_thresholds) if v <= min_amount][-1]
+        if len(self.prod_multi_unlock_thresholds) > current_unlock_index + 1:
+            next_threshold = self.prod_multi_unlock_thresholds[current_unlock_index + 1]
+            num_to_purchase = self.prod_resources[resource_index].num_to_purchase()
+            return resource_amount + num_to_purchase >= next_threshold
+        else:
+            return False
+
+    def check_prestige(self):
+        points_on_prestige = self.prestige_manager.points_available_on_prestige(self.stat_tracker.cumulative_prod[-1])
+        if points_on_prestige > 100 and points_on_prestige > 2 * self.prestige_manager.available_points:
+            self.do_prestige()
+
+    def do_prestige(self):
+        new_prestige_points = self.prestige_manager.points_available_on_prestige(self.stat_tracker.cumulative_prod[-1])
+        self.prestige_manager.available_points = new_prestige_points
+        self.prod_multi_upgrades.current_index = 0
+        self.demand_multi_upgrades.current_index = 0
+        self.power_value_upgrade_manager.current_index = 0
+        for manager in self.demand_upgrade_managers:
+            manager.current_index = 0
+        for manager in self.prod_upgrade_managers:
+            manager.current_index = 0
+        for resource in self.prod_resources:
+            resource.amount = 0
+        self.prod_resources[0].amount = 1
+        for resource in self.demand_resources:
+            resource.amount = 0
+        self.demand_resources[0].amount = 1
+        self.power_value.count = 0
 
 
 class PowerValue:
@@ -310,24 +415,52 @@ class UpgradeManager:
         self.current_index += 1
 
 
+class Prestige:
+    def __init__(self):
+        self.tipping_point = 1e15
+        self.tipping_point_amount = 100
+        self.available_points = 0
+        self.bonus_per_point = .01
+        self.count_bonus_max_out_magnitude = 200
+        self.final_growth_rate = 1.01
+
+    def points_available_on_prestige(self, cumulative_prod):
+        return self.tipping_point_amount * math.sqrt(cumulative_prod/self.tipping_point)
+
+    def prod_factor(self):
+        return 1 + self.bonus_per_point * self.available_points/2
+
+    def demand_factor(self):
+        return 1 + self.bonus_per_point * self.available_points/2
+
+    def growth_rate(self, base_growth_rate):
+        pass
+
+
 class StatTracker:
 
     def __init__(self):
         self.demand = list()  # type: List[float]
         self.production = list()  # type: List[float]
+        self.income_multiplier = list()
         self.income = list()
         self.delta_time = list()  # type: List[float]
         self.time = list()  # type: List[float]
         self.prod_counts = list()  # type: List[List[int]]
         self.demand_counts = list()  # type: List[List[int]]
+        self.cumulative_prod = list()
+        self.cumulative_demand = list()
+        self.cumulative_income = list()
 
     def update_stats(self, optimizer):
         # type: (Optimizer) -> None
-        self.demand.append(optimizer.total_demand_income())
-        self.production.append(optimizer.total_prod_income())
+        self.demand.append(optimizer.current_demand)
+        self.production.append(optimizer.current_prod)
         self.income.append(optimizer.total_income())
         self.update_demand_resource_counts(optimizer)
         self.update_prod_resource_counts(optimizer)
+        self.income_multiplier.append(optimizer.income_multiplier())
+        self.update_cumulative_values()
 
     def update_demand_resource_counts(self, optimizer):
         # type: (Optimizer) -> None
@@ -356,6 +489,17 @@ class StatTracker:
         else:
             self.time.append(time_taken)
 
+    def update_cumulative_values(self):
+        # Warning: This function makes assumption that update_time has already been called this iteration.
+        if len(self.cumulative_prod) > 0:
+            self.cumulative_demand.append(self.cumulative_demand[-1] + self.demand[-1] * self.delta_time[-1])
+            self.cumulative_prod.append(self.cumulative_prod[-1] + self.production[-1] * self.delta_time[-1])
+            self.cumulative_income.append(self.cumulative_income[-1] + self.income[-1] * self.delta_time[-1])
+        else:
+            self.cumulative_demand.append(self.demand[-1] * self.delta_time[-1])
+            self.cumulative_prod.append(self.production[-1] * self.delta_time[-1])
+            self.cumulative_income.append(self.income[-1] * self.delta_time[-1])
+
     def time_hours(self):
         return [t/3600 for t in self.time]
 
@@ -364,19 +508,21 @@ if __name__ == "__main__":
     data_loader = DataLoader.DataLoader()
     data_loader.load_optimizer()
     opt = data_loader.load_optimizer()
-    print(data_loader.load_power_value())
 
-    opt.run_optimization(1400)
+    cProfile.run('opt.run_optimization(20000)')
 
     stat_tracker = opt.stat_tracker
 
     plt.loglog(stat_tracker.time_hours(), stat_tracker.income)
+    plt.loglog(stat_tracker.time_hours(), stat_tracker.income_multiplier)
+    plt.loglog(stat_tracker.time_hours(), stat_tracker.demand)
+    plt.loglog(stat_tracker.time_hours(), stat_tracker.production)
     plt.figure()
 
     time_hours = stat_tracker.time_hours()
     index = 0
     for count_list in stat_tracker.demand_counts:
-        plt.plot(time_hours, count_list, label="Demand Resource {0} Count".format(index))
+        plt.plot(count_list, label="Demand Resource {0} Count".format(index))
         index += 1
     plt.legend()
     plt.figure()
