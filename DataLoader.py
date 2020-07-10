@@ -87,6 +87,7 @@ class DataLoader:
             resource.growth_rate = growth_rate
             resource.unlock_thresholds = thresholds
             resource.unlock_factors = factors
+            resource.initialize()
             resources.append(resource)
             index += 1
         return resources
@@ -117,6 +118,7 @@ class DataLoader:
             resource.growth_rate = growth_rate
             resource.unlock_thresholds = thresholds
             resource.unlock_factors = factors
+            resource.initialize()
             resources.append(resource)
             index += 1
         return resources
