@@ -470,12 +470,27 @@ class Prestige:
         return self.tipping_point_amount * math.sqrt(cumulative_prod/self.tipping_point)
 
     def prod_factor(self):
-        return 1 + self.bonus_per_point * self.available_points/2
+        return 1 + self.bonus_per_point * self.available_points
 
     def demand_factor(self):
-        return 1 + self.bonus_per_point * self.available_points/2
+        return 1 + self.bonus_per_point * self.available_points
 
-    def growth_rate(self, base_growth_rate):
+    def prod_growth_rate(self, base_growth_rate):
+        pass
+
+    def demand_growth_rate(self, base_growth_rate):
+        pass
+
+    def prod_cost_reduction(self):
+        pass
+
+    def demand_cost_reduction(self):
+        pass
+
+    def prod_resource_start(self):
+        pass
+
+    def demand_resource_start(self):
         pass
 
 
@@ -505,6 +520,11 @@ class StatTracker:
         self.demand_purchase_flat_costs = []
         self.production_purchase_flat_costs = []
         self.power_value_purchase_flat_costs = []
+
+        self.ordered_demand_purchase_costs = []
+        self.ordered_production_purchase_costs = []
+        self.ordered_production_indices = []
+        self.ordered_demand_indices = []
 
     def update_stats(self, optimizer):
         # type: (Optimizer) -> None
@@ -576,10 +596,22 @@ class StatTracker:
     def demand_purchase_made(self, cost):
         self.demand_purchase_indices.append(len(self.demand))
         self.demand_purchase_flat_costs.append(cost)
+        if len(self.ordered_demand_purchase_costs) == 0:
+            self.ordered_demand_indices.append(len(self.demand))
+            self.ordered_demand_purchase_costs.append(cost)
+        elif cost >= self.ordered_demand_purchase_costs[-1]:
+            self.ordered_demand_indices.append(len(self.demand))
+            self.ordered_demand_purchase_costs.append(cost)
 
     def prod_purchase_made(self, cost):
         self.production_purchase_indices.append(len(self.demand))
         self.production_purchase_flat_costs.append(cost)
+        if len(self.ordered_production_purchase_costs) == 0:
+            self.ordered_production_indices.append(len(self.demand))
+            self.ordered_production_purchase_costs.append(cost)
+        elif cost >= self.ordered_production_purchase_costs[-1]:
+            self.ordered_production_indices.append(len(self.demand))
+            self.ordered_production_purchase_costs.append(cost)
 
     def power_value_purchase_made(self, cost):
         self.power_value_purchase_indices.append(len(self.demand))
@@ -593,7 +625,7 @@ if __name__ == "__main__":
 
     print([].append(1))
     # cProfile.run('opt.run_optimization(10000)')
-    opt.run_optimization(1500)
+    opt.run_optimization(20000)
 
     stat_tracker = opt.stat_tracker
 
@@ -611,30 +643,44 @@ if __name__ == "__main__":
     # max_prod_costs = [max(i) for i in zip(*stat_tracker.prod_costs)]
     # max_demand_costs = [max(i) for i in zip(*stat_tracker.demand_costs)]
 
-    demand_purchase_times = [stat_tracker.time[i] for i in stat_tracker.demand_purchase_indices]
-    prod_purchase_time = [stat_tracker.time[i] for i in stat_tracker.production_purchase_indices]
+    # demand_purchase_times = [stat_tracker.time[i] for i in stat_tracker.demand_purchase_indices]
+    # prod_purchase_time = [stat_tracker.time[i] for i in stat_tracker.production_purchase_indices]
+    #
+    # plt.loglog(demand_purchase_times, stat_tracker.demand_purchase_flat_costs)
+    # plt.loglog(prod_purchase_time, stat_tracker.production_purchase_flat_costs)
+    # plt.figure()
+    # print(min(stat_tracker.demand_purchase_flat_costs))
+    #
+    # time_hours = stat_tracker.time_hours()
+    # index = 0
+    # for count_list in stat_tracker.demand_counts:
+    #     plt.plot(count_list, label="Demand Resource {0} Count".format(index))
+    #     index += 1
+    # plt.legend()
+    # plt.figure()
+    #
+    # time_hours = stat_tracker.time_hours()
+    # index = 0
+    # for count_list in stat_tracker.prod_counts:
+    #     plt.plot(time_hours, count_list, label="Prod Resource {0} Count".format(index))
+    #     index += 1
+    # plt.legend()
+    #
+    # plt.figure()
+    # plt.semilogy(time_hours, stat_tracker.cumulative_demand)
+    # plt.semilogy(time_hours, stat_tracker.cumulative_prod)
 
-    plt.loglog(demand_purchase_times, stat_tracker.demand_purchase_flat_costs)
-    plt.loglog(prod_purchase_time, stat_tracker.production_purchase_flat_costs)
     plt.figure()
-    print(min(stat_tracker.demand_purchase_flat_costs))
-
-    time_hours = stat_tracker.time_hours()
-    index = 0
-    for count_list in stat_tracker.demand_counts:
-        plt.plot(count_list, label="Demand Resource {0} Count".format(index))
-        index += 1
+    demand_purchase_times = [stat_tracker.time[i] for i in stat_tracker.ordered_demand_indices]
+    prod_purchase_time = [stat_tracker.time[i] for i in stat_tracker.ordered_production_indices]
+    plt.loglog(demand_purchase_times, stat_tracker.ordered_demand_purchase_costs, label="Demand Costs")
+    plt.loglog(prod_purchase_time, stat_tracker.ordered_production_purchase_costs, label="Production Costs")
+    plt.loglog(stat_tracker.time, stat_tracker.cumulative_income, label="Income")
     plt.legend()
+
     plt.figure()
-
-    time_hours = stat_tracker.time_hours()
-    index = 0
-    for count_list in stat_tracker.prod_counts:
-        plt.plot(time_hours, count_list, label="Prod Resource {0} Count".format(index))
-        index += 1
+    plt.semilogy(stat_tracker.ordered_demand_purchase_costs, label="Demand Costs")
+    plt.semilogy(stat_tracker.ordered_production_purchase_costs, label="Production Costs")
     plt.legend()
+
     plt.show()
-
-    power_value = PowerValue()
-    power_value.amount_second_growth_rate = 200
-    power_value.base_cost = 10
