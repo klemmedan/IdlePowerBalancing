@@ -1,6 +1,6 @@
 
 import openpyxl
-from IdlePowerOptimization import Optimizer, UpgradeManager, Resource, PowerValue
+from DynamicBalancing import DynamicBalancer, UpgradeManager, Resource, PowerValue, FactorManager
 from typing import List, Optional
 
 
@@ -20,7 +20,7 @@ class DataLoader:
         self.power_value = PowerValue()
         self.power_value_upgrade_manager = UpgradeManager()
 
-        self.optimizer = Optimizer()
+        self.balancer = DynamicBalancer()
 
         self.wb = openpyxl.load_workbook(filename="IdlePowerBalancing.xlsx", data_only=True)
         self.prod_sheet_name = 'prod_base_values'
@@ -38,7 +38,7 @@ class DataLoader:
         self.power_value_sheet_name = 'power_value'
 
     def load_optimizer(self):
-        # type: () -> Optimizer
+        # type: () -> DynamicBalancer
         self.production_resources = self.load_prod_resources()
         self.demand_resources = self.load_demand_resources()
         self.production_upgrade_managers = self.load_prod_upgrade_managers()
@@ -52,27 +52,27 @@ class DataLoader:
         self.power_value = self.load_power_value()
         self.power_value_upgrade_manager = self.load_power_value_upgrade_manager()
 
-        optimizer = Optimizer()
-        optimizer.prod_resources = self.production_resources
-        optimizer.demand_resources = self.demand_resources
-        optimizer.prod_multi_unlock_factors = self.production_multi_unlock_factors
-        optimizer.prod_multi_unlock_thresholds = self.production_multi_unlock_thresholds
-        optimizer.prod_multi_upgrades = self.production_multi_upgrade_manager
-        optimizer.prod_upgrade_managers = self.production_upgrade_managers
-        optimizer.demand_multi_unlock_factors = self.demand_multi_unlock_factors
-        optimizer.demand_multi_unlock_thresholds = self.demand_multi_unlock_thresholds
-        optimizer.demand_upgrade_managers = self.demand_upgrade_managers
-        optimizer.demand_multi_upgrades = self.demand_multi_upgrade_manager
-        optimizer.power_value_upgrade_manager = self.power_value_upgrade_manager
-        optimizer.power_value = self.power_value
-        for r in optimizer.prod_resources:
-            r.prestige_manager = optimizer.prestige_manager
+        balancer = DynamicBalancer()
+        balancer.prod_resources = self.production_resources
+        balancer.demand_resources = self.demand_resources
+        balancer.prod_multi_unlock_factors = self.production_multi_unlock_factors
+        balancer.prod_multi_unlock_thresholds = self.production_multi_unlock_thresholds
+        balancer.prod_multi_upgrades = self.production_multi_upgrade_manager
+        balancer.prod_upgrade_managers = self.production_upgrade_managers
+        balancer.demand_multi_unlock_factors = self.demand_multi_unlock_factors
+        balancer.demand_multi_unlock_thresholds = self.demand_multi_unlock_thresholds
+        balancer.demand_upgrade_managers = self.demand_upgrade_managers
+        balancer.demand_multi_upgrades = self.demand_multi_upgrade_manager
+        balancer.power_value_upgrade_manager = self.power_value_upgrade_manager
+        balancer.power_value = self.power_value
+        for r in balancer.prod_resources:
+            r.prestige_manager = balancer.prestige_manager
             r.production_type = True
-        for r in optimizer.demand_resources:
-            r.prestige_manager = optimizer.prestige_manager
+        for r in balancer.demand_resources:
+            r.prestige_manager = balancer.prestige_manager
             r.production_type = False
 
-        return optimizer
+        return balancer
 
     def load_prod_resources(self):
         ws = self.wb[self.prod_sheet_name]
@@ -92,7 +92,8 @@ class DataLoader:
             resource.base_cost = base_cost
             resource.growth_rate = growth_rate
             resource.unlock_thresholds = thresholds
-            resource.unlock_factors = factors
+            # resource.unlock_factors = factors
+            resource.unlock_factors = [1]
             resource.initialize()
             resources.append(resource)
             index += 1
@@ -100,8 +101,8 @@ class DataLoader:
 
     def load_prod_unlocks(self, index):
         ws = self.wb[self.prod_unlock_sheet_name]
-        thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=3)]
-        base_factors = [row[index+1].value for row in ws.iter_rows(min_row=3)]
+        thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=3) if row[0].value is not None]
+        base_factors = [row[index+1].value for row in ws.iter_rows(min_row=3) if row[index+1].value is not None]
         factors = self.cumulative_factors(base_factors)
         return thresholds, factors
 
@@ -123,7 +124,8 @@ class DataLoader:
             resource.base_cost = base_cost
             resource.growth_rate = growth_rate
             resource.unlock_thresholds = thresholds
-            resource.unlock_factors = factors
+            # resource.unlock_factors = factors
+            resource.unlock_factors = [1]
             resource.initialize()
             resources.append(resource)
             index += 1
@@ -134,15 +136,15 @@ class DataLoader:
             return self.load_manual_unlocks()
         else:
             ws = self.wb[self.demand_unlock_sheet_name]
-            thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=4)]
-            base_factors = [row[index].value for row in ws.iter_rows(min_row=4)]
+            thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=4) if row[0].value is not None]
+            base_factors = [row[index].value for row in ws.iter_rows(min_row=4) if row[index].value is not None]
             factors = self.cumulative_factors(base_factors)
             return thresholds, factors
 
     def load_manual_unlocks(self):
         ws = self.wb[self.demand_manual_unlocks_sheet_name]
-        thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=4)]
-        base_factors = [row[1].value for row in ws.iter_rows(min_row=4)]
+        thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=4) if row[0].value is not None]
+        base_factors = [row[1].value for row in ws.iter_rows(min_row=4) if row[1].value is not None]
         factors = self.cumulative_factors(base_factors)
         return thresholds, factors
 
@@ -152,10 +154,10 @@ class DataLoader:
 
     def load_prod_upgrade_manager(self, index):
         ws = self.wb[self.prod_upgrade_sheet_name]
-        costs = [0] + [row[index].value for row in ws.iter_rows(min_row=3, min_col=2)]
-        base_factors = [row[index+int(len(row)/2)].value for row in ws.iter_rows(min_row=3, min_col=2)]
-        factors = self.cumulative_factors(base_factors)
-
+        costs = [0] + [row[index].value for row in ws.iter_rows(min_row=3, min_col=2) if row[index].value is not None]
+        # base_factors = [row[index+int(len(row)/2)].value for row in ws.iter_rows(min_row=3, min_col=2)]
+        # factors = self.cumulative_factors(base_factors)
+        factors = [1]
         return self.make_upgrade_manager(costs, factors)
 
     def load_demand_upgrade_managers(self):
@@ -167,45 +169,50 @@ class DataLoader:
             return self.load_manual_upgrade_manager()
         else:
             ws = self.wb[self.demand_upgrade_sheet_name]
-            costs = [0] + [row[index-1].value for row in ws.iter_rows(min_row=4, min_col=2)]
-            base_factors = [row[index+int(len(row)/2-1)].value for row in ws.iter_rows(min_row=4, min_col=2)]
-            factors = self.cumulative_factors(base_factors)
-
+            costs = [0] + [row[index-1].value for row in ws.iter_rows(min_row=4, min_col=2) if row[index-1].value is not None]
+            # base_factors = [row[index+int(len(row)/2-1)].value for row in ws.iter_rows(min_row=4, min_col=2)]
+            # factors = self.cumulative_factors(base_factors)
+            factors = [1]
             return self.make_upgrade_manager(costs, factors)
 
     def load_manual_upgrade_manager(self):
         ws = self.wb[self.demand_manual_upgrades_sheet_name]
-        costs = [0] + [row[0].value for row in ws.iter_rows(min_row=4)]
-        base_factors = [row[1].value for row in ws.iter_rows(min_row=4)]
-        factors = self.cumulative_factors(base_factors)
+        costs = [0] + [row[0].value for row in ws.iter_rows(min_row=4) if row[0].value is not None]
+        # base_factors = [row[1].value for row in ws.iter_rows(min_row=4)]
+        # factors = self.cumulative_factors(base_factors)
+        factors = [1]
         return self.make_upgrade_manager(costs, factors)
 
     def load_multi_prod_unlocks(self):
         ws = self.wb[self.prod_multi_sheet_name]
         thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=3) if row[0].value is not None]
-        base_factors = [row[1].value for row in ws.iter_rows(min_row=3) if row[0].value is not None]
-        factors = self.cumulative_factors(base_factors)
+        # base_factors = [row[1].value for row in ws.iter_rows(min_row=3) if row[0].value is not None]
+        # factors = self.cumulative_factors(base_factors)
+        factors = [1]
         return thresholds, factors
 
     def load_multi_prod_upgrade_manager(self):
         ws = self.wb[self.prod_multi_sheet_name]
-        costs = [0] + [row[3].value for row in ws.iter_rows(min_row=3)]
-        base_factors = [row[4].value for row in ws.iter_rows(min_row=3)]
-        factors = self.cumulative_factors(base_factors)
+        costs = [0] + [row[3].value for row in ws.iter_rows(min_row=3) if row[3].value is not None]
+        # base_factors = [row[4].value for row in ws.iter_rows(min_row=3)]
+        # factors = self.cumulative_factors(base_factors)
+        factors = [1]
         return self.make_upgrade_manager(costs, factors)
 
     def load_multi_demand_unlocks(self):
         ws = self.wb[self.demand_multi_sheet_name]
         thresholds = [0] + [row[0].value for row in ws.iter_rows(min_row=4) if row[0].value is not None]
-        base_factors = [row[1].value for row in ws.iter_rows(min_row=4)if row[0].value is not None]
-        factors = self.cumulative_factors(base_factors)
+        # base_factors = [row[1].value for row in ws.iter_rows(min_row=4)if row[0].value is not None]
+        # factors = self.cumulative_factors(base_factors)
+        factors = [1]
         return thresholds, factors
 
     def load_multi_demand_upgrade_manager(self):
         ws = self.wb[self.demand_multi_sheet_name]
-        costs = [0] + [row[2].value for row in ws.iter_rows(min_row=4)]
-        base_factors = [row[3].value for row in ws.iter_rows(min_row=4)]
-        factors = self.cumulative_factors(base_factors)
+        costs = [0] + [row[2].value for row in ws.iter_rows(min_row=4) if row[2].value is not None]
+        # base_factors = [row[3].value for row in ws.iter_rows(min_row=4)]
+        # factors = self.cumulative_factors(base_factors)
+        factors = [1]
         return self.make_upgrade_manager(costs, factors)
 
     def load_power_value(self):
@@ -219,13 +226,15 @@ class DataLoader:
 
     def load_power_value_upgrade_manager(self):
         ws = self.wb[self.power_value_sheet_name]
-        costs = [0] + [row[0].value for row in ws.iter_rows(min_row=4)]
-        base_factors = [row[1].value for row in ws.iter_rows(min_row=4)]
-        factors = self.cumulative_factors(base_factors)
+        costs = [0] + [row[0].value for row in ws.iter_rows(min_row=4) if row[0].value is not None]
+        # base_factors = [row[1].value for row in ws.iter_rows(min_row=4)]
+        # factors = self.cumulative_factors(base_factors)
+        factors = [1]
         return self.make_upgrade_manager(costs, factors)
 
     @staticmethod
     def cumulative_factors(base_factors):
+        base_factors = [f for f in base_factors if f is not None]
         factors = [1]
         for f in base_factors:
             factors.append(factors[-1]*f)
