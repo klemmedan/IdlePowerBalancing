@@ -72,6 +72,7 @@ class DataLoader:
             r.prestige_manager = balancer.prestige_manager
             r.production_type = False
 
+        balancer.add_factor_info_to_resources()
         return balancer
 
     def load_prod_resources(self):

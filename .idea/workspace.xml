@@ -4,18 +4,11 @@
     <bookmark url="file://$PROJECT_DIR$/IdlePowerOptimization.py" line="667" mnemonic="9" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="040b670b-eb1d-4aeb-b644-741d6438de9a" name="Default" comment="">
-      <change afterPath="$PROJECT_DIR$/DynamicBalanceDataLoader.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/DynamicBalancing.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/PlottingStuff.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/PrestigeTesting.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ResourceTesting.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/IdlePowerBalancing.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/IdlePowerBalancing.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="040b670b-eb1d-4aeb-b644-741d6438de9a" name="Default" comment="Got the dynamic balancer working and starting to get some values that seem to be working well. Decent progress rate for the first month of gameplay or so, so far.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DataLoader.py" beforeDir="false" afterPath="$PROJECT_DIR$/DataLoader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/DynamicBalanceDataLoader.py" beforeDir="false" afterPath="$PROJECT_DIR$/DynamicBalanceDataLoader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/DynamicBalancing.py" beforeDir="false" afterPath="$PROJECT_DIR$/DynamicBalancing.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/IdlePowerBalancing.xlsx" beforeDir="false" afterPath="$PROJECT_DIR$/IdlePowerBalancing.xlsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/IdlePowerOptimization.py" beforeDir="false" afterPath="$PROJECT_DIR$/IdlePowerOptimization.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -33,12 +26,14 @@
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="py" value="16125" />
+          <entry key="py" value="16981" />
+          <entry key="txt" value="195" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="Python" value="16125" />
+          <entry key="PLAIN_TEXT" value="195" />
+          <entry key="Python" value="16981" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.open">
@@ -61,19 +56,20 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/DynamicBalancing.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="223">
-              <caret line="837" column="40" lean-forward="true" selection-start-line="837" selection-start-column="40" selection-end-line="837" selection-end-column="40" />
+            <state relative-caret-position="315">
+              <caret line="868" column="36" selection-start-line="868" selection-start-column="36" selection-end-line="868" selection-end-column="36" />
               <folding>
                 <element signature="e#0#31#0" expanded="true" />
-                <marker date="1598763759851" expanded="true" signature="8800:9147" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="13595:14070" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="27356:27365" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="28339:29583" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="32584:32590" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="36573:36699" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="37220:38176" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="37819:38158" ph="..." />
-                <marker date="1598763759851" expanded="true" signature="39559:39562" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="1873:1892" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="9183:9530" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="13978:14453" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="27675:27684" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="28658:29902" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="32903:32909" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="36892:37018" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="37539:38495" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="38138:38477" ph="..." />
+                <marker date="1599021404578" expanded="true" signature="39880:39883" ph="..." />
               </folding>
             </state>
           </provider>
@@ -94,8 +90,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/DynamicBalanceDataLoader.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="368">
-              <caret line="111" column="26" selection-start-line="111" selection-start-column="26" selection-end-line="111" selection-end-column="26" />
+            <state relative-caret-position="381">
+              <caret line="74" column="47" selection-start-line="74" selection-start-column="47" selection-end-line="74" selection-end-column="47" />
               <folding>
                 <element signature="e#1#16#0" expanded="true" />
               </folding>
@@ -161,6 +157,8 @@
       <find>Prestige:</find>
       <find>multi</find>
       <find>is not</find>
+      <find>class Res</find>
+      <find>class Pre</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -175,8 +173,8 @@
         <option value="$PROJECT_DIR$/DataLoader.py" />
         <option value="$PROJECT_DIR$/ResourceTesting.py" />
         <option value="$PROJECT_DIR$/IdlePowerOptimization.py" />
-        <option value="$PROJECT_DIR$/DynamicBalanceDataLoader.py" />
         <option value="$PROJECT_DIR$/PlottingStuff.py" />
+        <option value="$PROJECT_DIR$/DynamicBalanceDataLoader.py" />
         <option value="$PROJECT_DIR$/DynamicBalancing.py" />
       </list>
     </option>
@@ -333,6 +331,14 @@
       <option name="presentableId" value="Default" />
       <updated>1596941174412</updated>
     </task>
+    <task id="LOCAL-00001" summary="Got the dynamic balancer working and starting to get some values that seem to be working well. Decent progress rate for the first month of gameplay or so, so far.">
+      <created>1598764016252</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1598764016252</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -361,12 +367,16 @@
   <component name="VcsContentAnnotationSettings">
     <option name="myLimit" value="2678400000" />
   </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Got the dynamic balancer working and starting to get some values that seem to be working well. Decent progress rate for the first month of gameplay or so, so far." />
+    <option name="LAST_COMMIT_MESSAGE" value="Got the dynamic balancer working and starting to get some values that seem to be working well. Decent progress rate for the first month of gameplay or so, so far." />
+  </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/DynamicBalancing.py</url>
-          <line>858</line>
+          <line>867</line>
           <option name="timeStamp" value="29" />
         </line-breakpoint>
       </breakpoints>
@@ -427,16 +437,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/DynamicBalanceDataLoader.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="368">
-          <caret line="111" column="26" selection-start-line="111" selection-start-column="26" selection-end-line="111" selection-end-column="26" />
-          <folding>
-            <element signature="e#1#16#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/PlottingStuff.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="368">
@@ -447,21 +447,32 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/DynamicBalanceDataLoader.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="381">
+          <caret line="74" column="47" selection-start-line="74" selection-start-column="47" selection-end-line="74" selection-end-column="47" />
+          <folding>
+            <element signature="e#1#16#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/DynamicBalancing.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="223">
-          <caret line="837" column="40" lean-forward="true" selection-start-line="837" selection-start-column="40" selection-end-line="837" selection-end-column="40" />
+        <state relative-caret-position="315">
+          <caret line="868" column="36" selection-start-line="868" selection-start-column="36" selection-end-line="868" selection-end-column="36" />
           <folding>
             <element signature="e#0#31#0" expanded="true" />
-            <marker date="1598763759851" expanded="true" signature="8800:9147" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="13595:14070" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="27356:27365" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="28339:29583" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="32584:32590" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="36573:36699" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="37220:38176" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="37819:38158" ph="..." />
-            <marker date="1598763759851" expanded="true" signature="39559:39562" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="1873:1892" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="9183:9530" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="13978:14453" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="27675:27684" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="28658:29902" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="32903:32909" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="36892:37018" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="37539:38495" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="38138:38477" ph="..." />
+            <marker date="1599021404578" expanded="true" signature="39880:39883" ph="..." />
           </folding>
         </state>
       </provider>

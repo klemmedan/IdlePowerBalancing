@@ -41,6 +41,17 @@ class DynamicBalancer:
 
         self.prestige_manager = Prestige()
 
+    def add_factor_info_to_resources(self):
+        for i, r in enumerate(self.demand_resources):
+            r.resource_index = i
+            r.factor_generator = self.factor_generator
+        for i, r in enumerate(self.prod_resources):
+            r.resource_index = i
+            r.factor_generator = self.factor_generator
+
+    def set_upgrade_purchase_order(self):
+        pass
+
     def run_optimization_no_prestige(self, num_steps):
         self.current_prod = self.total_prod_income()
         self.current_demand = self.total_demand_income()
@@ -355,6 +366,8 @@ class Resource:
         # Factor is cumulative and starts at 1 (i.e. 1, 2, 4, 12, 36, etc.)
         self.unlock_factors = [1]
         self.prestige_manager = Prestige() # type: Prestige
+        self.factor_generator = FactorManager  # type: FactorManager
+        self.resource_index = 0
 
     def increment(self):
         # print("Amount" + str(self.amount))
@@ -365,11 +378,9 @@ class Resource:
         try:
             unlock_factor = self.unlock_factors[self.current_unlock_index]
         except IndexError:
-            print("Amount: " + str(self.amount))
-            print("Prestige amount: " + str(self.base_amount()))
-            print("Current unlock index: " + str(self.current_unlock_index))
-            print("Current unlock factors: {}".format(len(self.unlock_factors)))
-            print("Thresholds: {}".format(self.unlock_thresholds))
+            print("There was that error thing, let's see if it self corrects.")
+            unlock_factor = self.factor_generator.factor_from_ratio(1, 1)
+            self.unlock_factors.append(self.unlock_factors[-1]*unlock_factor)
 
         return (self.amount + self.base_amount()) * self.base_increment * unlock_factor
 
@@ -413,8 +424,8 @@ class Resource:
     def update_cost(self):
         upgraded_growth_rate = self.growth_rate_after_prestige()
         n = self.num_to_purchase()
-        total_cost = self.growth_rate * (1 - upgraded_growth_rate ** (n + self.amount-1)) / (1 - upgraded_growth_rate)
-        previous_cost = self.growth_rate * (1 - upgraded_growth_rate ** (self.amount-1)) / (1 - upgraded_growth_rate)
+        total_cost = upgraded_growth_rate * (1 - upgraded_growth_rate ** (n + self.amount-1)) / (1 - upgraded_growth_rate)
+        previous_cost = upgraded_growth_rate * (1 - upgraded_growth_rate ** (self.amount-1)) / (1 - upgraded_growth_rate)
         diff_cost = self.base_cost * (total_cost - previous_cost)
         self.current_cost = diff_cost
 
@@ -440,7 +451,6 @@ class Resource:
             return self.prestige_manager.demand_cost_reduction_factor()
 
     def base_amount(self):
-        return 0
         if self.production_type:
             return self.prestige_manager.prod_resource_start()
         else:
@@ -494,8 +504,7 @@ class Prestige:
         self.tipping_point_amount = 100
         self.available_points = 0
         self.bonus_per_point = .01
-        self.count_bonus_max_out_magnitude = 200
-        self.final_growth_rate = 1.02
+        self.final_growth_rate = 1.01
         self.growth_rate_orders_of_magnitude = 120
         self.cost_reduction_orders_of_magnitude = 120
         self.cost_reduction_max_factor = 1000
@@ -854,9 +863,11 @@ if __name__ == "__main__":
 
     print([].append(1))
     # cProfile.run('opt.run_optimization(10000)')
-    opt.run_optimization_no_prestige(3300)
+    opt.run_optimization_no_prestige(3400)
 
     stat_tracker = opt.stat_tracker
+    plt.semilogy(stat_tracker.time_seconds(), stat_tracker.delta_time)
+    plt.show()
     plotter = DataPlotter()
     plotter.stat_tracker = stat_tracker
     plotter.do_plots()
