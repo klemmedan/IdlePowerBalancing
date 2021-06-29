@@ -50,7 +50,7 @@ class DataLoader:
         self.demand_multi_unlock_thresholds, self.demand_multi_unlock_factors = self.load_multi_demand_unlocks()
 
         self.power_value = self.load_power_value()
-        self.power_value_upgrade_manager = self.load_power_value_upgrade_manager()
+        # self.power_value_upgrade_manager = self.load_power_value_upgrade_manager()
 
         balancer = DynamicBalancer()
         balancer.prod_resources = self.production_resources
@@ -63,7 +63,7 @@ class DataLoader:
         balancer.demand_multi_unlock_thresholds = self.demand_multi_unlock_thresholds
         balancer.demand_upgrade_managers = self.demand_upgrade_managers
         balancer.demand_multi_upgrades = self.demand_multi_upgrade_manager
-        balancer.power_value_upgrade_manager = self.power_value_upgrade_manager
+        # balancer.power_value_upgrade_manager = self.power_value_upgrade_manager
         balancer.power_value = self.power_value
         for r in balancer.prod_resources:
             r.prestige_manager = balancer.prestige_manager

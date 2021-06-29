@@ -5,8 +5,17 @@ import matplotlib.pyplot as plt
 class DataPlotter:
     def __init__(self):
         self.stat_tracker = None  # type: StatTracker
+        self.time_seconds = []
+        self.time_minutes = []
+        self.time_hours = []
+        self.time_days = []
 
     def do_plots(self):
+        self.time_seconds = [t for t in self.stat_tracker.time_seconds() if t <= 300]
+        self.time_minutes = [t for t in self.stat_tracker.time_minutes() if t <= 300]
+        self.time_hours = [t for t in self.stat_tracker.time_hours() if t <= 300]
+        self.time_days = self.stat_tracker.time_days()
+
         self.plot_separated_demand()
         self.plot_demand_counts()
         self.plot_demand_costs()
@@ -15,223 +24,39 @@ class DataPlotter:
         self.plot_prod_costs()
         self.plot_combined_income()
         self.plot_cumulative_income()
+        self.plot_upgrade_factors()
+        self.plot_upgrade_costs()
         plt.show()
 
     def plot_separated_demand(self):
         data = self.stat_tracker.single_demand_values
-        plt.figure()
-
-        plt.subplot(2, 2, 1)
-        time = [t for t in self.stat_tracker.time_seconds() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Demand")
-
-        plt.subplot(2, 2, 2)
-        time = [t for t in self.stat_tracker.time_minutes() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (minutes)")
-        plt.ylabel("Demand")
-
-        plt.subplot(2, 2, 3)
-        time = [t for t in self.stat_tracker.time_hours() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (hours)")
-        plt.ylabel("Demand")
-
-        plt.subplot(2, 2, 4)
-        time = self.stat_tracker.time_days()
-        for i, d in enumerate(data):
-            plt.semilogy(time, d, label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (days)")
-        plt.ylabel("Demand")
+        y_label = 'Demand'
+        self.plot_multiple_resources(data, y_label)
 
     def plot_demand_counts(self):
         data = self.stat_tracker.demand_counts
-        plt.figure()
-
-        plt.subplot(2, 2, 1)
-        time = [t for t in self.stat_tracker.time_seconds() if t <= 300]
-        for i, d in enumerate(data):
-            plt.plot(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Demand Resource Count")
-
-        plt.subplot(2, 2, 2)
-        time = [t for t in self.stat_tracker.time_minutes() if t <= 300]
-        for i, d in enumerate(data):
-            plt.plot(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (minutes)")
-        plt.ylabel("Demand Resource Count")
-
-        plt.subplot(2, 2, 3)
-        time = [t for t in self.stat_tracker.time_hours() if t <= 300]
-        for i, d in enumerate(data):
-            plt.plot(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (hours)")
-        plt.ylabel("Demand Resource Count")
-
-        plt.subplot(2, 2, 4)
-        time = self.stat_tracker.time_days()
-        for i, d in enumerate(data):
-            plt.plot(time, d, label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (days)")
-        plt.ylabel("Demand Resource Count")
+        y_label = 'Demand Resource Count'
+        self.plot_multiple_resources(data, y_label)
 
     def plot_demand_costs(self):
         data = self.stat_tracker.demand_costs
-        plt.figure()
-
-        plt.subplot(2, 2, 1)
-        time = [t for t in self.stat_tracker.time_seconds() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Demand Resource Cost")
-
-        plt.subplot(2, 2, 2)
-        time = [t for t in self.stat_tracker.time_minutes() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (minutes)")
-        plt.ylabel("Demand Resource Cost")
-
-        plt.subplot(2, 2, 3)
-        time = [t for t in self.stat_tracker.time_hours() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (hours)")
-        plt.ylabel("Demand Resource Cost")
-
-        plt.subplot(2, 2, 4)
-        time = self.stat_tracker.time_days()
-        for i, d in enumerate(data):
-            plt.semilogy(time, d, label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (days)")
-        plt.ylabel("Demand Resource Cost")
+        y_label = 'Demand Resource Cost'
+        self.plot_multiple_resources(data, y_label)
 
     def plot_separated_prod(self):
         data = self.stat_tracker.single_prod_values
-        plt.figure()
-
-        plt.subplot(2, 2, 1)
-        time = [t for t in self.stat_tracker.time_seconds() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Production")
-
-        plt.subplot(2, 2, 2)
-        time = [t for t in self.stat_tracker.time_minutes() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (minutes)")
-        plt.ylabel("Production")
-
-        plt.subplot(2, 2, 3)
-        time = [t for t in self.stat_tracker.time_hours() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (hours)")
-        plt.ylabel("Production")
-
-        plt.subplot(2, 2, 4)
-        time = self.stat_tracker.time_days()
-        for i, d in enumerate(data):
-            plt.semilogy(time, d, label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (days)")
-        plt.ylabel("Production")
+        y_label = 'Production'
+        self.plot_multiple_resources(data, y_label)
 
     def plot_prod_counts(self):
         data = self.stat_tracker.prod_counts
-        plt.figure()
-
-        plt.subplot(2, 2, 1)
-        time = [t for t in self.stat_tracker.time_seconds() if t <= 300]
-        for i, d in enumerate(data):
-            plt.plot(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Prod Resource Count")
-
-        plt.subplot(2, 2, 2)
-        time = [t for t in self.stat_tracker.time_minutes() if t <= 300]
-        for i, d in enumerate(data):
-            plt.plot(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (minutes)")
-        plt.ylabel("Prod Resource Count")
-
-        plt.subplot(2, 2, 3)
-        time = [t for t in self.stat_tracker.time_hours() if t <= 300]
-        for i, d in enumerate(data):
-            plt.plot(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (hours)")
-        plt.ylabel("Prod Resource Count")
-
-        plt.subplot(2, 2, 4)
-        time = self.stat_tracker.time_days()
-        for i, d in enumerate(data):
-            plt.plot(time, d, label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (days)")
-        plt.ylabel("Prod Resource Count")
+        y_label = 'Prod Resource Count'
+        self.plot_multiple_resources(data, y_label)
 
     def plot_prod_costs(self):
         data = self.stat_tracker.prod_costs
-        plt.figure()
-
-        plt.subplot(2, 2, 1)
-        time = [t for t in self.stat_tracker.time_seconds() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Prod Resource Cost")
-
-        plt.subplot(2, 2, 2)
-        time = [t for t in self.stat_tracker.time_minutes() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (minutes)")
-        plt.ylabel("Prod Resource Cost")
-
-        plt.subplot(2, 2, 3)
-        time = [t for t in self.stat_tracker.time_hours() if t <= 300]
-        for i, d in enumerate(data):
-            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (hours)")
-        plt.ylabel("Prod Resource Cost")
-
-        plt.subplot(2, 2, 4)
-        time = self.stat_tracker.time_days()
-        for i, d in enumerate(data):
-            plt.semilogy(time, d, label='Resource {}'.format(i))
-        plt.legend()
-        plt.xlabel("Time (days)")
-        plt.ylabel("Prod Resource Cost")
+        y_label = 'Prod Resource Cost'
+        self.plot_multiple_resources(data, y_label)
 
     def plot_cumulative_income(self):
         prod = self.stat_tracker.cumulative_prod
@@ -316,3 +141,100 @@ class DataPlotter:
         plt.legend()
         plt.xlabel("Time (days)")
         plt.ylabel("Current")
+
+    def plot_upgrade_factors(self):
+        data = self.stat_tracker.prod_single_upgrade_factors
+        plt.figure()
+
+        ylabel = 'Prod Single Upgrade Factors'
+        plt.subplot(2, 2, 1)
+        for i, d in enumerate(data):
+            plt.plot(d, label='Resource {}'.format(i))
+        plt.legend()
+        plt.ylabel(ylabel)
+
+        data = self.stat_tracker.prod_multi_upgrade_factors
+        ylabel = 'Prod Multi Upgrade Factors'
+        plt.subplot(2, 2, 2)
+        plt.plot(data)
+        plt.ylabel(ylabel)
+
+        data = self.stat_tracker.demand_single_upgrade_factors
+        ylabel = 'Demand Single Upgrade Factors'
+        plt.subplot(2, 2, 3)
+        for i, d in enumerate(data):
+            plt.plot(d, label='Resource {}'.format(i))
+        plt.legend()
+        plt.ylabel(ylabel)
+
+        data = self.stat_tracker.demand_multi_upgrade_factors
+        ylabel = 'Demand Multi Upgrade Factors'
+        plt.subplot(2, 2, 4)
+        plt.plot(data)
+        plt.ylabel(ylabel)
+
+    def plot_upgrade_costs(self):
+        data = self.stat_tracker.prod_single_upgrade_costs
+        plt.figure()
+
+        ylabel = 'Prod Single Upgrade Costs'
+        plt.subplot(2, 2, 1)
+        for i, d in enumerate(data):
+            plt.semilogy(d, label='Resource {}'.format(i))
+        plt.legend()
+        plt.ylabel(ylabel)
+
+        data = self.stat_tracker.prod_multi_upgrade_costs
+        ylabel = 'Prod Multi Upgrade Costs'
+        plt.subplot(2, 2, 2)
+        plt.semilogy(data)
+        plt.ylabel(ylabel)
+
+        data = self.stat_tracker.demand_single_upgrade_costs
+        ylabel = 'Demand Single Upgrade Costs'
+        plt.subplot(2, 2, 3)
+        for i, d in enumerate(data):
+            plt.semilogy(d, label='Resource {}'.format(i))
+        plt.legend()
+        plt.ylabel(ylabel)
+
+        data = self.stat_tracker.demand_multi_upgrade_costs
+        ylabel = 'Demand Multi Upgrade Costs'
+        plt.subplot(2, 2, 4)
+        plt.semilogy(data)
+        plt.ylabel(ylabel)
+
+    def plot_multiple_resources(self, data, ylabel):
+        plt.figure()
+
+        plt.subplot(2, 2, 1)
+        time = self.time_seconds
+        for i, d in enumerate(data):
+            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
+        plt.legend()
+        plt.xlabel("Time (seconds)")
+        plt.ylabel(ylabel)
+
+        plt.subplot(2, 2, 2)
+        time = self.time_minutes
+        for i, d in enumerate(data):
+            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
+        plt.legend()
+        plt.xlabel("Time (minutes)")
+        plt.ylabel(ylabel)
+
+        plt.subplot(2, 2, 3)
+        time = self.time_hours
+        for i, d in enumerate(data):
+            plt.semilogy(time, [x for i, x in enumerate(d) if i < len(time)], label='Resource {}'.format(i))
+        plt.legend()
+        plt.xlabel("Time (hours)")
+        plt.ylabel(ylabel)
+
+        plt.subplot(2, 2, 4)
+        time = self.time_days
+        for i, d in enumerate(data):
+            plt.semilogy(time, d, label='Resource {}'.format(i))
+        plt.legend()
+        plt.xlabel("Time (days)")
+        plt.ylabel(ylabel)

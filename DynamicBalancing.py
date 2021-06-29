@@ -1,13 +1,19 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import math
 import copy
-from typing import List, Optional
+from typing import List
 import DynamicBalanceDataLoader
-import cProfile
-import timeit
-import pylab
-from PlottingStuff import DataPlotter
+from PlottingStuff import *
+from GenerateUpgradeTimes import GenerateUpgradeTimes
+from GenerateUpgradeTimes import add_randomness, massage_early_upgrade_times
+import DataExport
+import random
+
+prod_single_key = 'prod_single_upgrades'
+demand_single_key = 'demand_single_upgrades'
+prod_multi_key = 'prod_multi_upgrades'
+demand_multi_key = 'demand_multi_upgrades'
+power_value_key = 'power_value_upgrades'
 
 purchase_factor = 1.05
 
@@ -18,6 +24,7 @@ class DynamicBalancer:
         self.stat_tracker = StatTracker()
         self.factor_generator = FactorManager()  # type: FactorManager
         self.factor_generator.balancer = self
+        self.battery_generator = BatteryEnergyValue()
 
         self.prod_resources = list()  # type: List[Resource]
         self.demand_resources = list()  # type: List[Resource]
@@ -30,7 +37,7 @@ class DynamicBalancer:
         self.prod_upgrade_managers = list()  # type: List[UpgradeManager]
         self.demand_upgrade_managers = list()  # type: List[UpgradeManager]
         self.power_value = PowerValue()
-        self.power_value_upgrade_manager = UpgradeManager()
+        # self.power_value_upgrade_manager = UpgradeManager()
         self.current_multi_demand_unlock_index = 0
         self.current_multi_prod_unlock_index = 0
 
@@ -49,8 +56,122 @@ class DynamicBalancer:
             r.resource_index = i
             r.factor_generator = self.factor_generator
 
-    def set_upgrade_purchase_order(self):
-        pass
+    def run_optimization_definite_times(self):
+        self.initialize_battery_value()
+        num_upgrades = self.num_upgrades()
+        time_generator = GenerateUpgradeTimes(num_upgrades + 1)
+        times = time_generator.calculate_parabolic_times(b=0)
+        times = massage_early_upgrade_times(times)
+        times = add_randomness(times)
+        ordered_upgrades = self.generate_ordered_list()
+        self.remove_upgrade_costs()
+        self.current_prod = self.total_prod_income()
+        self.current_demand = self.total_demand_income()
+        self.current_income_multiplier = self.income_multiplier()
+        self.current_income = self.total_income()
+        i = 0
+        while i < num_upgrades:
+
+            next_upgrade_cost = self.total_income() * times[i]
+            prod_resource_cost = min([r.cost() for r in self.prod_resources])
+            demand_resource_cost = min([r.cost() for r in self.demand_resources])
+            # power_value_cost = self.power_value.cost()
+            min_cost = min(prod_resource_cost, demand_resource_cost)
+
+            if min_cost <= next_upgrade_cost / 5:
+                self.stat_tracker.update_time(min_cost, self)
+                times[i] = times[i] - min_cost / self.current_income
+                if min_cost == prod_resource_cost:
+                    self.purchase_prod_resource()
+                else:
+                    self.purchase_demand_resource()
+            else:
+                self.purchase_upgrade(ordered_upgrades[i], next_upgrade_cost)
+                i += 1
+
+            self.current_prod = self.total_prod_income()
+            self.current_demand = self.total_demand_income()
+            self.current_income_multiplier = self.income_multiplier()
+            self.current_income = self.total_income()
+
+            self.stat_tracker.update_stats(self)
+            self.handle_batteries()
+            new_prestige_points = \
+                self.prestige_manager.points_available_on_prestige(self.stat_tracker.cumulative_prod[-1])
+            self.prestige_manager.available_points = new_prestige_points
+            self.update_resource_costs()
+            # self.update_resource_unlock_thresholds_from_prestige()
+
+    def initialize_battery_value(self):
+        num_tiers = self.battery_generator.num_battery_tiers
+        time_generator = GenerateUpgradeTimes(num_tiers)
+        times = time_generator.calculate_parabolic_times(b=0)
+        times = add_randomness(times)
+        self.battery_generator.synthesis_upgrade_times = times
+
+    def handle_batteries(self):
+        current_index = self.battery_generator.synthesis_tier
+        cost = self.battery_generator.synthesis_upgrade_times[current_index] * self.total_income()
+        self.battery_generator.update_elapsed_time(self.stat_tracker.delta_time[-1])
+        if self.battery_generator.synthesis_tier > current_index:
+            self.stat_tracker.update_battery_tier_upgrade_costs(cost)
+            self.stat_tracker.update_battery_tier_synthesis_energy(self)
+
+    def purchase_upgrade(self, upgrade_packet, cost):
+        upgrade_type = upgrade_packet[0]
+        upgrade_index = upgrade_packet[1]
+        if upgrade_type == prod_single_key:
+            manager = self.prod_upgrade_managers[upgrade_index]
+            factor = self.factor_generator.factor_for_prod_resource(upgrade_index)
+        elif upgrade_type == demand_single_key:
+            manager = self.demand_upgrade_managers[upgrade_index]
+            factor = self.factor_generator.factor_for_demand_resource(upgrade_index)
+        elif upgrade_type == prod_multi_key:
+            manager = self.prod_multi_upgrades
+            factor = self.factor_generator.factor_for_multi_prod()
+        elif upgrade_type == demand_multi_key:
+            manager = self.demand_multi_upgrades
+            factor = self.factor_generator.factor_for_multi_demand()
+        # else:
+        #     manager = self.power_value_upgrade_manager
+        #     factor = 2
+        manager.upgrade_costs.append(cost)
+        self.stat_tracker.update_time(cost, self)
+        manager.make_purchase(factor)
+
+    def num_upgrades(self):
+        num_upgrades = 0
+        # -1 to all because they all start off with a '0' cost upgrade for starting at.
+        for manager in self.demand_upgrade_managers:
+            num_upgrades += len(manager.upgrade_costs) - 1
+        for manager in self.prod_upgrade_managers:
+            num_upgrades += len(manager.upgrade_costs) - 1
+        num_upgrades += len(self.demand_multi_upgrades.upgrade_costs) - 1
+        num_upgrades += len(self.prod_multi_upgrades.upgrade_costs) - 1
+        # num_upgrades += len(self.power_value_upgrade_manager.upgrade_costs) - 1
+        return num_upgrades
+
+    def remove_upgrade_costs(self):
+        self.demand_multi_upgrades.upgrade_costs = []
+        self.prod_multi_upgrades.upgrade_costs = []
+        # self.power_value_upgrade_manager.upgrade_costs = []
+        for i in range(len(self.prod_upgrade_managers)):
+            self.prod_upgrade_managers[i].upgrade_costs = []
+        for i in range(len(self.demand_upgrade_managers)):
+            self.demand_upgrade_managers[i].upgrade_costs = []
+
+    def generate_ordered_list(self):
+        cost_list = []
+        for i, manager in enumerate(self.prod_upgrade_managers):
+            cost_list = cost_list + [(prod_single_key, i, c) for c in manager.upgrade_costs if c > 0]
+        for i, manager in enumerate(self.demand_upgrade_managers):
+            cost_list = cost_list + [(demand_single_key, i, c) for c in manager.upgrade_costs if c > 0]
+        cost_list = cost_list + [(prod_multi_key, 0, c) for c in self.prod_multi_upgrades.upgrade_costs if c > 0]
+        cost_list = cost_list + [(demand_multi_key, 0, c) for c in self.demand_multi_upgrades.upgrade_costs if c > 0]
+        # cost_list = cost_list + [(power_value_key, 0, c)
+        #                          for c in self.power_value_upgrade_manager.upgrade_costs if c > 0]
+        cost_list.sort(key=lambda x: x[2])
+        return cost_list
 
     def run_optimization_no_prestige(self, num_steps):
         self.current_prod = self.total_prod_income()
@@ -65,7 +186,8 @@ class DynamicBalancer:
             self.current_income_multiplier = self.income_multiplier()
             self.current_income = self.total_income()
             self.stat_tracker.update_stats(self)
-            new_prestige_points = self.prestige_manager.points_available_on_prestige(self.stat_tracker.cumulative_prod[-1])
+            new_prestige_points = \
+                self.prestige_manager.points_available_on_prestige(self.stat_tracker.cumulative_prod[-1])
             self.prestige_manager.available_points = new_prestige_points
             self.update_resource_costs()
 
@@ -77,6 +199,20 @@ class DynamicBalancer:
         for r in self.demand_resources:
             r.update_cost()
 
+    def update_resource_unlock_thresholds_from_prestige(self):
+        for i, r in enumerate(self.prod_resources):
+            if r.unlock_threshold_is_exceeded():
+                factor = self.factor_generator.factor_for_prod_resource(i)
+                self.stat_tracker.update_single_prod_unlock_factor(i, factor)
+                r.unlock_factors.append(r.unlock_factors[-1] * factor)
+                r.current_unlock_index = r.unlock_index()
+        for i, r in enumerate(self.demand_resources):
+            if r.unlock_threshold_is_exceeded():
+                factor = self.factor_generator.factor_for_demand_resource(i)
+                self.stat_tracker.update_single_demand_unlock_factor(i, factor)
+                r.unlock_factors.append(r.unlock_factors[-1] * factor)
+                r.current_unlock_index = r.unlock_index()
+
     def purchase_lowest_cost_item(self):
         demand_multi_upgrade_cost = self.demand_multi_upgrades.next_cost() / 10
         demand_single_upgrade_cost = min([um.next_cost() for um in self.demand_upgrade_managers]) / 4
@@ -84,11 +220,10 @@ class DynamicBalancer:
         prod_single_upgrade_cost = min([um.next_cost() for um in self.prod_upgrade_managers]) / 4
         prod_resource_cost = min([r.cost() for r in self.prod_resources])
         demand_resource_cost = min([r.cost() for r in self.demand_resources])
-        power_value_cost = self.power_value.cost() / 2
-        power_value_upgrade_cost = self.power_value_upgrade_manager.next_cost() / 15
+        # power_value_cost = self.power_value.cost() / 2
+        # power_value_upgrade_cost = self.power_value_upgrade_manager.next_cost() / 15
         min_cost = min(demand_multi_upgrade_cost, demand_single_upgrade_cost, prod_multi_upgrade_cost,
-                       prod_single_upgrade_cost, prod_resource_cost, demand_resource_cost,
-                       power_value_cost, power_value_upgrade_cost)
+                       prod_single_upgrade_cost, prod_resource_cost, demand_resource_cost)
 
         self.stat_tracker.update_time(min_cost, self)
         if min_cost == demand_multi_upgrade_cost:
@@ -103,10 +238,10 @@ class DynamicBalancer:
             self.purchase_prod_resource()
         elif min_cost == demand_resource_cost:
             self.purchase_demand_resource()
-        elif min_cost == power_value_cost:
-            self.purchase_power_value_resource()
-        elif min_cost == power_value_upgrade_cost:
-            self.purchase_power_value_upgrade()
+        # elif min_cost == power_value_cost:
+        #     self.purchase_power_value_resource()
+        # elif min_cost == power_value_upgrade_cost:
+        #     self.purchase_power_value_upgrade()
 
     def purchase_multi_demand_upgrade(self):
         factor = self.factor_generator.factor_for_multi_demand()
@@ -158,17 +293,16 @@ class DynamicBalancer:
         self.power_value.make_purchase()
 
     def purchase_power_value_upgrade(self):
-        self.power_value_upgrade_manager.make_purchase(2)
+        pass
+        # self.stat_tracker.update_time(self.power_value_upgrade_manager.next_cost(), self)
+        # self.stat_tracker.power_value_purchase_made(self.power_value_upgrade_manager.next_cost())
+        # self.power_value_upgrade_manager.make_purchase(2)
 
     def make_power_value_purchase(self):
-        self.stat_tracker.update_time(self.power_value.cost(), self)
-        self.stat_tracker.power_value_purchase_made(self.power_value.cost())
-        self.power_value.make_purchase()
-
-    def make_power_value_upgrade_purchase(self):
-        self.stat_tracker.update_time(self.power_value_upgrade_manager.next_cost(), self)
-        self.stat_tracker.power_value_purchase_made(self.power_value_upgrade_manager.next_cost())
-        self.power_value_upgrade_manager.make_purchase()
+        pass
+        # self.stat_tracker.update_time(self.power_value.cost(), self)
+        # self.stat_tracker.power_value_purchase_made(self.power_value.cost())
+        # self.power_value.make_purchase()
 
     def total_prod_income(self):
         total = sum([resource.increment() * self.prod_upgrade_managers[i].current_factor()
@@ -202,7 +336,7 @@ class DynamicBalancer:
         return min(self.current_demand, self.current_prod)*self.current_income_multiplier
 
     def income_multiplier(self):
-        return self.power_value.current_factor*self.power_value_upgrade_manager.current_factor()
+        return self.battery_generator.power_value()
 
     def current_demand_multi_unlock_factor(self):
         # min_amount = min([r.amount + r.base_amount() for r in self.demand_resources])
@@ -217,54 +351,37 @@ class DynamicBalancer:
         else:
             return self.demand_multi_unlock_factors[current_unlock_index]
 
-    def purchase_will_trigger_demand_multi_unlock(self, resource_index):
-        resource_amount = self.demand_resources[resource_index].amount
-        min_amount = min([r.amount for r in self.demand_resources])
-        if resource_amount > min_amount:
-            return False
-        current_unlock_index = [i for i, v in enumerate(self.demand_multi_unlock_thresholds) if v <= min_amount][-1]
-        if len(self.demand_multi_unlock_thresholds) > current_unlock_index + 1:
-            next_threshold = self.demand_multi_unlock_thresholds[current_unlock_index + 1]
-            num_to_purchase = self.demand_resources[resource_index].num_to_purchase()
-            return resource_amount + num_to_purchase >= next_threshold
-        else:
-            return False
-
     def prod_purchase_will_trigger_multi_unlock(self, resource_index):
         amounts = [r.amount + r.base_amount() for r in self.prod_resources]
         min_index = amounts.index(min(amounts))
-        if min_index != resource_index:  # Give an early exit condition for resources that will for sure not trigger.
-            return False
+        if min_index != resource_index:
+            return False  # Give an early exit condition for resources that will for sure not trigger.
+        if self.current_multi_prod_unlock_index + 1 >= len(self.prod_multi_unlock_thresholds):
+            return False  # Exit early if all multi unlocks have been acquired.
+        next_threshold = self.prod_multi_unlock_thresholds[self.current_multi_prod_unlock_index + 1]
+        for i, a in enumerate(amounts):
+            if i != resource_index and a < next_threshold:
+                return False  # Exit if any other resource does not meet the threshold criterion.
+
         resource = self.prod_resources[resource_index]
-        min_amount = min(amounts)
-        current_unlock_index = [i for i, v in enumerate(self.prod_multi_unlock_thresholds) if v <= min_amount][-1]
-        if current_unlock_index + 1 < len(self.prod_multi_unlock_thresholds):
-            amount_after_buying = resource.amount + resource.base_amount() + resource.num_to_purchase()
-            next_multi_threshold = self.prod_multi_unlock_thresholds[current_unlock_index + 1]
-            other_resources_meet_threshold = min([a for i,a in enumerate(amounts) if i != resource_index])\
-                                             >= next_multi_threshold
-            this_resource_will_meet_threshold = amount_after_buying >= next_multi_threshold
-            return other_resources_meet_threshold and this_resource_will_meet_threshold
-        else:
-            return False
+        amount_after_buying = resource.amount + resource.base_amount() + resource.num_to_purchase()
+        return amount_after_buying >= next_threshold
 
     def demand_purchase_will_trigger_multi_unlock(self, resource_index):
         amounts = [r.amount + r.base_amount() for r in self.demand_resources]
         min_index = amounts.index(min(amounts))
-        if min_index != resource_index:  # Give an early exit condition for resources that will for sure not trigger.
-            return False
+        if min_index != resource_index:
+            return False  # Give an early exit condition for resources that will for sure not trigger.
+        if self.current_multi_demand_unlock_index + 1 >= len(self.demand_multi_unlock_thresholds):
+            return False  # Exit early if all multi unlocks have been acquired.
+        next_threshold = self.demand_multi_unlock_thresholds[self.current_multi_demand_unlock_index + 1]
+        for i, a in enumerate(amounts):
+            if i != resource_index and a < next_threshold:
+                return False  # Exit if any other resource does not meet the threshold criterion.
+
         resource = self.demand_resources[resource_index]
-        min_amount = min(amounts)
-        current_unlock_index = [i for i, v in enumerate(self.demand_multi_unlock_thresholds) if v <= min_amount][-1]
-        if current_unlock_index + 1 < len(self.demand_multi_unlock_thresholds):
-            amount_after_buying = resource.amount + resource.base_amount() + resource.num_to_purchase()
-            next_multi_threshold = self.demand_multi_unlock_thresholds[current_unlock_index + 1]
-            other_resources_meet_threshold = min([a for i, a in enumerate(amounts) if i != resource_index])\
-                >= next_multi_threshold
-            this_resource_will_meet_threshold = amount_after_buying >= next_multi_threshold
-            return other_resources_meet_threshold and this_resource_will_meet_threshold
-        else:
-            return False
+        amount_after_buying = resource.amount + resource.base_amount() + resource.num_to_purchase()
+        return amount_after_buying >= next_threshold
 
     def generate_prod_multi_unlock_factor(self):
         factor = self.factor_generator.factor_for_multi_prod()
@@ -368,20 +485,10 @@ class Resource:
         self.prestige_manager = Prestige() # type: Prestige
         self.factor_generator = FactorManager  # type: FactorManager
         self.resource_index = 0
+        self.stat_tracker = StatTracker()
 
     def increment(self):
-        # print("Amount" + str(self.amount))
-        # print("Prestige amount: " + str(self.base_amount()))
-        # print("Current unlock index: " + str(self.current_unlock_index))
-        # print("Current unlock factors: {}".format(len(self.unlock_factors)))
-        # print("Thresholds: {}".format(self.unlock_thresholds))
-        try:
-            unlock_factor = self.unlock_factors[self.current_unlock_index]
-        except IndexError:
-            print("There was that error thing, let's see if it self corrects.")
-            unlock_factor = self.factor_generator.factor_from_ratio(1, 1)
-            self.unlock_factors.append(self.unlock_factors[-1]*unlock_factor)
-
+        unlock_factor = self.unlock_factors[self.current_unlock_index]
         return (self.amount + self.base_amount()) * self.base_increment * unlock_factor
 
     def cost(self):
@@ -402,7 +509,7 @@ class Resource:
         return self.current_num_to_purchase
 
     def update_num_to_purchase(self):
-        to_next_threshold = self.next_unlock_threshold() - self.amount
+        to_next_threshold = self.next_unlock_threshold() - (self.amount + self.base_amount())
         base_increase = math.floor(self.amount*(purchase_factor - 1))
         return max(1, min(base_increase, to_next_threshold))
 
@@ -415,11 +522,12 @@ class Resource:
         unlock_reached = self.purchase_will_reach_unlock_threshold()
         if unlock_reached:
             self.unlock_factors.append(self.unlock_factors[-1] * factor)
+            self.current_unlock_index += 1
         self.amount = self.amount + self.num_to_purchase()
         self.current_num_to_purchase = self.update_num_to_purchase()
         self.update_cost()
-        if unlock_reached:
-            self.current_unlock_index = self.unlock_index()
+        # if unlock_reached:
+        #     self.current_unlock_index = self.unlock_index()
 
     def update_cost(self):
         upgraded_growth_rate = self.growth_rate_after_prestige()
@@ -455,6 +563,10 @@ class Resource:
             return self.prestige_manager.prod_resource_start()
         else:
             return self.prestige_manager.demand_resource_start()
+
+    def unlock_threshold_is_exceeded(self):
+        test_index = self.unlock_index()
+        return test_index > self.current_unlock_index
 
 
 class UpgradeManager:
@@ -510,47 +622,162 @@ class Prestige:
         self.cost_reduction_max_factor = 1000
         self.start_resource_max_factor = 1000
         self.start_resource_orders_of_magnitude = 120
+        self.spreading_factor = 3
 
     def points_available_on_prestige(self, cumulative_prod):
         return math.floor(self.tipping_point_amount * math.sqrt(cumulative_prod/self.tipping_point))
 
     def prod_factor(self):
-        return 1 + self.bonus_per_point * self.available_points
+        return 1 + self.bonus_per_point * self.available_points / self.spreading_factor
 
     def demand_factor(self):
-        return 1 + self.bonus_per_point * self.available_points
+        return 1 + self.bonus_per_point * self.available_points / self.spreading_factor
 
     def prod_growth_rate(self, base_growth_rate):
         # return base_growth_rate
-        factor = min([1, 1/self.growth_rate_orders_of_magnitude * math.log10(1+self.available_points)])
+        factor = min([1, 1/self.growth_rate_orders_of_magnitude * math.log10(1+self.available_points / self.spreading_factor)])
         growth_rate_diff = base_growth_rate - self.final_growth_rate
         return base_growth_rate - factor * growth_rate_diff
 
     def demand_growth_rate(self, base_growth_rate):
         # return base_growth_rate
-        factor = min([1, 1/self.growth_rate_orders_of_magnitude * math.log10(1+self.available_points)])
+        factor = min([1, 1/self.growth_rate_orders_of_magnitude * math.log10(1+self.available_points / self.spreading_factor)])
         growth_rate_diff = base_growth_rate - self.final_growth_rate
         return base_growth_rate - factor * growth_rate_diff
 
     def prod_cost_reduction_factor(self):
         factor = 1+self.cost_reduction_max_factor * (1/self.cost_reduction_orders_of_magnitude) * \
-                 math.log10(1+self.available_points)
+                 math.log10(1+self.available_points / self.spreading_factor)
         return min([self.cost_reduction_max_factor, factor])
 
     def demand_cost_reduction_factor(self):
         factor = 1+self.cost_reduction_max_factor * (1/self.cost_reduction_orders_of_magnitude) * \
-                 math.log10(1+self.available_points)
+                 math.log10(1+self.available_points / self.spreading_factor)
         return min([self.cost_reduction_max_factor, factor])
 
     def prod_resource_start(self):
         factor = self.start_resource_max_factor * (1/self.start_resource_orders_of_magnitude) * \
-                 math.log10(1+self.available_points)
+                 math.log10(1+self.available_points / self.spreading_factor)
         return math.floor(min([self.start_resource_max_factor, factor]))
 
     def demand_resource_start(self):
         factor = self.start_resource_max_factor * (1/self.start_resource_orders_of_magnitude) * \
-                 math.log10(1+self.available_points)
+                 math.log10(1+self.available_points / self.spreading_factor)
         return math.floor(min([self.start_resource_max_factor, factor]))
+
+
+class BatteryValues:
+
+    def __init__(self):
+        self.num_batteries = 120
+        self.num_capacity_upgrades = 200
+        self.base_capacity = 1e5
+        self.prod_capacity_factor = 1
+        self.min_battery_capacity_factor = 3.5
+        self.income_synthesis_factor = 0.5
+        self.income_upgrade_factor = 0.5
+        self.capacity_synthesis_factor = 10
+        self.battery_times = self.generate_battery_times()
+        self.battery_upgrade_times = self.generate_capacity_upgrade_times()
+        self.current_battery_index = 0
+        self.current_upgrade_index = 0
+        self.current_capacity = self.base_capacity
+
+        self.individual_capacities = list()
+        self.synthesis_values = list()
+        self.synthesis_upgrade_costs = list()
+        self.factors = list()
+        self.capacity_upgrade_costs = list()
+        self.current_factor = 1
+
+    def generate_battery_times(self):
+        time_generator = GenerateUpgradeTimes(self.num_batteries + 1)
+        times = [2000+0.9*t for t in time_generator.calculate_cumulative_parabolic_times(b=self.num_batteries/4)]
+        return times
+
+    def generate_capacity_upgrade_times(self):
+        time_generator = GenerateUpgradeTimes(self.num_capacity_upgrades + 1)
+        times = [2000+0.9*t for t in time_generator.calculate_cumulative_parabolic_times(b=self.num_capacity_upgrades/4)]
+        return times
+
+    def generate_battery(self, balancer):
+        # type: (DynamicBalancer) -> None
+        previous_capacity = 0
+        if len(self.individual_capacities) > 0:
+            previous_capacity = self.individual_capacities[-1]
+        new_min_capacity = self.min_battery_capacity_factor * previous_capacity
+
+        capacity = max([balancer.current_prod * self.prod_capacity_factor/self.current_factor, new_min_capacity])
+        synthesis_energy = self.capacity_synthesis_factor*capacity
+        synthesis_upgrade_cost = balancer.stat_tracker.cumulative_income[-1] * self.income_synthesis_factor
+
+        self.current_capacity = capacity * self.current_factor
+        self.individual_capacities.append(capacity)
+        self.synthesis_values.append(synthesis_energy)
+        self.synthesis_upgrade_costs.append(synthesis_upgrade_cost)
+        self.current_battery_index += 1
+
+    def generate_upgrade(self, balancer):
+        # type: (DynamicBalancer) -> None
+        factor = random.choice([2, 3, 4, 5])
+        cost = self.income_upgrade_factor * balancer.stat_tracker.cumulative_income[-1]
+
+        self.factors.append(factor)
+        self.current_factor *= factor
+        self.capacity_upgrade_costs.append(cost)
+        self.current_capacity = self.individual_capacities[-1] * self.current_factor
+        self.current_upgrade_index += 1
+
+    def next_upgrade_time(self):
+        if self.current_upgrade_index < self.num_capacity_upgrades:
+            return self.battery_upgrade_times[self.current_upgrade_index]
+        else:
+            return 1e500
+
+    def next_battery_time(self):
+        if self.current_battery_index< self.num_batteries:
+            return self.battery_times[self.current_battery_index]
+        else:
+            return 1e500
+
+
+class BatteryEnergyValue:
+
+    def __init__(self):
+        self.base_power_value = 0.01
+        self.base_battery_power_value = 0.001
+        self.battery_combine_increase_factor = 2.5
+        self.model_battery_tiers_combined_to = 16
+        self.num_battery_tiers = 90
+        self.synthesis_tier = 0
+        self.elapsed_time = 0
+        self.cumulative_time = 0
+        self.time_orders_of_magnitude = math.log10(2*365*24*3600)
+        self.synthesis_upgrade_times = list()
+        t = GenerateUpgradeTimes(self.num_battery_tiers)
+        t.start = 10
+        t.end = 5*3600
+        self.synthesis_times = t.calculate_cumulative_parabolic_times()
+
+    def set_times(self, times):
+        self.synthesis_upgrade_times = times
+        end_time = times[-1]
+        self.time_orders_of_magnitude = math.log10(end_time)
+
+    def power_value(self):
+        effective_tier = self.synthesis_tier + self.model_battery_tiers_combined_to /self.time_orders_of_magnitude * math.log10(1 + self.cumulative_time)
+        effective_tier = min (self.num_battery_tiers, effective_tier)
+        power_value = self.base_battery_power_value + self.base_battery_power_value * (self.battery_combine_increase_factor ** effective_tier)
+        return power_value
+
+    def update_elapsed_time(self, time):
+        self.elapsed_time += time
+        self.cumulative_time += time
+        if self.synthesis_tier < len(self.synthesis_upgrade_times) - 1:
+            time_for_next_upgrade = self.synthesis_upgrade_times[self.synthesis_tier]
+            if self.elapsed_time >= time_for_next_upgrade:
+                self.synthesis_tier += 1
+                self.elapsed_time = 0
 
 
 class StatTracker:
@@ -582,7 +809,7 @@ class StatTracker:
         self.power_value_purchase_indices = []
         self.demand_purchase_flat_costs = []
         self.production_purchase_flat_costs = []
-        self.power_value_purchase_flat_costs = []
+        # self.power_value_purchase_flat_costs = []
 
         self.ordered_demand_purchase_costs = []
         self.ordered_production_purchase_costs = []
@@ -597,6 +824,39 @@ class StatTracker:
         self.demand_single_upgrade_factors = dict()
         self.prod_multi_upgrade_factors = []
         self.demand_multi_upgrade_factors = []
+        # self.power_value_upgrade_factors = []
+
+        self.demand_single_upgrade_costs = []
+        self.demand_multi_upgrade_costs = []
+        self.prod_single_upgrade_costs = []
+        self.prod_multi_upgrade_costs = []
+        self.power_value_upgrade_costs = []
+
+        self.battery_upgrade_tier_costs = []
+        self.battery_synthesis_tier_energies = []
+
+    def dump_upgrade_info(self, optimizer):
+        # type: (DynamicBalancer) -> None
+        f = optimizer.prod_multi_upgrades.upgrade_factors
+        self.prod_multi_upgrade_factors = [f[i] / f[i-1] for i in range(1, len(f))]
+        f = optimizer.demand_multi_upgrades.upgrade_factors
+        self.demand_multi_upgrade_factors = [f[i] / f[i-1] for i in range(1, len(f))]
+        # f = optimizer.power_value_upgrade_manager.upgrade_factors
+        # self.power_value_upgrade_factors = [f[i] / f[i-1] for i in range(1, len(f))]
+        self.prod_single_upgrade_factors = []
+        for manager in optimizer.prod_upgrade_managers:
+            f = manager.upgrade_factors
+            self.prod_single_upgrade_factors.append([f[i] / f[i-1] for i in range(1, len(f))])
+        self.demand_single_upgrade_factors = []
+        for manager in optimizer.demand_upgrade_managers:
+            f = manager.upgrade_factors
+            self.demand_single_upgrade_factors.append([f[i] / f[i-1] for i in range(1, len(f))])
+
+        self.demand_multi_upgrade_costs = optimizer.demand_multi_upgrades.upgrade_costs
+        self.prod_multi_upgrade_costs = optimizer.prod_multi_upgrades.upgrade_costs
+        # self.power_value_upgrade_costs = optimizer.power_value_upgrade_manager.upgrade_costs
+        self.prod_single_upgrade_costs = [um.upgrade_costs for um in optimizer.prod_upgrade_managers]
+        self.demand_single_upgrade_costs = [um.upgrade_costs for um in optimizer.demand_upgrade_managers]
 
     def update_stats(self, optimizer):
         # type: (DynamicBalancer) -> None
@@ -752,6 +1012,16 @@ class StatTracker:
         else:
             self.prod_single_unlock_factors[index] = [factor]
 
+    def update_battery_tier_upgrade_costs(self, cost):
+        self.battery_upgrade_tier_costs.append(cost)
+
+    def update_battery_tier_synthesis_energy(self, balancer):
+        # type: (DynamicBalancer) -> None
+        tier_index = balancer.battery_generator.synthesis_tier
+        time = balancer.battery_generator.synthesis_times[tier_index]
+        energy = time * balancer.total_prod_income()
+        self.battery_synthesis_tier_energies.append(energy)
+
 
 class FactorManager:
 
@@ -765,8 +1035,8 @@ class FactorManager:
         prod_demand_factor = self.demand_over_prod_factor()
         rates = [self.single_demand_rate(i) for i in range(len(self.balancer.demand_resources))]
         ratios = [r / total_rate for r in rates]
-        ratio = (resource_rate / total_rate)
-        target_ratio = 1/len(self.balancer.demand_resources)
+        ratio = prod_demand_factor * (resource_rate / total_rate)
+        target_ratio = 0.5 * 1/len(self.balancer.demand_resources)
         return self.factor_from_ratio(ratio, target_ratio)
 
     def factor_for_prod_resource(self, resource_index):
@@ -774,8 +1044,8 @@ class FactorManager:
         total_rate = self.total_prod_rate()
         # Reduce ratio further if prod > demand, (lower ratio -> Higher average factor)
         prod_demand_factor = self.prod_over_demand_factor()
-        ratio = (resource_rate / total_rate)
-        target_ratio = 1/len(self.balancer.prod_resources)
+        ratio = prod_demand_factor * (resource_rate / total_rate)
+        target_ratio = 0.75*1/len(self.balancer.prod_resources)
         return self.factor_from_ratio(ratio, target_ratio)
 
     def factor_for_multi_prod(self):
@@ -858,16 +1128,30 @@ class FactorManager:
 
 
 if __name__ == "__main__":
-    data_loader = DynamicBalanceDataLoader.DataLoader()
-    opt = data_loader.load_optimizer()
 
-    print([].append(1))
-    # cProfile.run('opt.run_optimization(10000)')
-    opt.run_optimization_no_prestige(3400)
+    exporter = DataExport.DataExporter()
+    exporter.add_demand_flavor_texts_to_final_document()
+    exporter.add_prod_flavor_texts_to_final_document()
+    # data_loader = DynamicBalanceDataLoader.DataLoader()
+    # opt = data_loader.load_optimizer()
+    # opt.run_optimization_definite_times()
+    # opt.stat_tracker.dump_upgrade_info(opt)
+    # stats = opt.stat_tracker
+    # exporter = DataExport.DataExporter()
+    # exporter.export_data(opt)
+    #
+    # plt.semilogy(stats.time_days(), stats.income_multiplier)
+    # plt.show()
+    #
+    # plotter = DataPlotter()
+    # plotter.stat_tracker = stats
+    # plotter.do_plots()
 
-    stat_tracker = opt.stat_tracker
-    plt.semilogy(stat_tracker.time_seconds(), stat_tracker.delta_time)
-    plt.show()
-    plotter = DataPlotter()
-    plotter.stat_tracker = stat_tracker
-    plotter.do_plots()
+    # num_upgrades = opt.num_upgrades()
+    # time_generator = GenerateUpgradeTimes(num_upgrades + 1)
+    # times = time_generator.calculate_parabolic_times(b=0)
+    # times = massage_early_upgrade_times(times)
+    # end_index = len(times)
+    # plt.plot(times[0:end_index], 'o')
+    # plt.show()
+
