@@ -15,10 +15,10 @@ def add_randomness(per_time_list):
 # It also needs to make sure the first upgrade is not achieved *too* fast since we want that to be a little ways into
 # the gameplay.
 def massage_early_upgrade_times(times):
-    new_list = [t / 5 if i < 25 else t for i, t in enumerate(times)]
-    new_list = [t / 3 if 40 > i >= 25 else t for i, t in enumerate(new_list)]
-    new_list = [t / 1.5 if 80 > i >= 40 else t for i, t in enumerate(new_list)]
-    new_list[0] = 1200  # Take 20 minutes before getting to first upgrade.
+    new_list = [t / 1.5 if i < 25 else t for i, t in enumerate(times)]
+    new_list = [t / 1.25 if 40 > i >= 25 else t for i, t in enumerate(new_list)]
+    new_list = [t / 1.1 if 80 > i >= 40 else t for i, t in enumerate(new_list)]
+    new_list[0] = 1200  # Take 40 minutes before getting to first upgrade.
     return new_list
 
 

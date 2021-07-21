@@ -106,6 +106,14 @@ class DynamicBalancer:
         num_tiers = self.battery_generator.num_battery_tiers
         time_generator = GenerateUpgradeTimes(num_tiers)
         times = time_generator.calculate_parabolic_times(b=0)
+        times[0] = 6000
+        times[1] = 10000
+        times[2] = 15000
+        times[3] = 20000
+        times[4] = 25000
+        times[5] = 30000
+        times[6] = 70000
+        times[7] = 160000
         times = add_randomness(times)
         self.battery_generator.synthesis_upgrade_times = times
 
@@ -336,7 +344,10 @@ class DynamicBalancer:
         return min(self.current_demand, self.current_prod)*self.current_income_multiplier
 
     def income_multiplier(self):
-        return self.battery_generator.power_value()
+        cumulative_energy = 0
+        if len(self.stat_tracker.cumulative_prod) > 0:
+            cumulative_energy = self.stat_tracker.cumulative_prod[-1]
+        return self.battery_generator.power_value(cumulative_energy)
 
     def current_demand_multi_unlock_factor(self):
         # min_amount = min([r.amount + r.base_amount() for r in self.demand_resources])
@@ -617,11 +628,11 @@ class Prestige:
         self.available_points = 0
         self.bonus_per_point = .01
         self.final_growth_rate = 1.01
-        self.growth_rate_orders_of_magnitude = 120
-        self.cost_reduction_orders_of_magnitude = 120
+        self.growth_rate_orders_of_magnitude = 125
+        self.cost_reduction_orders_of_magnitude = 125
         self.cost_reduction_max_factor = 1000
         self.start_resource_max_factor = 1000
-        self.start_resource_orders_of_magnitude = 120
+        self.start_resource_orders_of_magnitude = 125
         self.spreading_factor = 3
 
     def points_available_on_prestige(self, cumulative_prod):
@@ -693,6 +704,7 @@ class BatteryValues:
     def generate_battery_times(self):
         time_generator = GenerateUpgradeTimes(self.num_batteries + 1)
         times = [2000+0.9*t for t in time_generator.calculate_cumulative_parabolic_times(b=self.num_batteries/4)]
+        print(times)
         return times
 
     def generate_capacity_upgrade_times(self):
@@ -747,12 +759,14 @@ class BatteryEnergyValue:
         self.base_power_value = 0.01
         self.base_battery_power_value = 0.001
         self.battery_combine_increase_factor = 2.5
-        self.model_battery_tiers_combined_to = 16
+        self.model_battery_tier_combine_start = 9
+        self.model_battery_tiers_combine_end = 13
         self.num_battery_tiers = 90
         self.synthesis_tier = 0
         self.elapsed_time = 0
         self.cumulative_time = 0
         self.time_orders_of_magnitude = math.log10(2*365*24*3600)
+        self.total_time = 2*365*24*3600
         self.synthesis_upgrade_times = list()
         t = GenerateUpgradeTimes(self.num_battery_tiers)
         t.start = 10
@@ -764,9 +778,15 @@ class BatteryEnergyValue:
         end_time = times[-1]
         self.time_orders_of_magnitude = math.log10(end_time)
 
-    def power_value(self):
-        effective_tier = self.synthesis_tier + self.model_battery_tiers_combined_to /self.time_orders_of_magnitude * math.log10(1 + self.cumulative_time)
-        effective_tier = min (self.num_battery_tiers, effective_tier)
+    def power_value(self, cumulative_energy):
+        if cumulative_energy <= 500000:
+            return self.base_power_value
+        # combine_tier = self.model_battery_tiers_combined_to * (math.log10(1 + self.cumulative_time) / self.time_orders_of_magnitude)
+        combine_tier = self.model_battery_tier_combine_start + (self.model_battery_tiers_combine_end -
+                                                                self.model_battery_tier_combine_start)*\
+                       math.sqrt(self.cumulative_time / self.total_time)
+        effective_tier = self.synthesis_tier + combine_tier
+        effective_tier = min(self.num_battery_tiers, effective_tier)
         power_value = self.base_battery_power_value + self.base_battery_power_value * (self.battery_combine_increase_factor ** effective_tier)
         return power_value
 
@@ -1130,15 +1150,14 @@ class FactorManager:
 if __name__ == "__main__":
 
     exporter = DataExport.DataExporter()
+    data_loader = DynamicBalanceDataLoader.DataLoader()
+    opt = data_loader.load_optimizer()
+    opt.run_optimization_definite_times()
+    opt.stat_tracker.dump_upgrade_info(opt)
+    stats = opt.stat_tracker
+    exporter.export_data(opt)
     exporter.add_demand_flavor_texts_to_final_document()
     exporter.add_prod_flavor_texts_to_final_document()
-    # data_loader = DynamicBalanceDataLoader.DataLoader()
-    # opt = data_loader.load_optimizer()
-    # opt.run_optimization_definite_times()
-    # opt.stat_tracker.dump_upgrade_info(opt)
-    # stats = opt.stat_tracker
-    # exporter = DataExport.DataExporter()
-    # exporter.export_data(opt)
     #
     # plt.semilogy(stats.time_days(), stats.income_multiplier)
     # plt.show()
@@ -1146,6 +1165,12 @@ if __name__ == "__main__":
     # plotter = DataPlotter()
     # plotter.stat_tracker = stats
     # plotter.do_plots()
+
+    cum_prod = stats.cumulative_prod[-1]
+    prestige_points = opt.prestige_manager.points_available_on_prestige(cum_prod)
+    print("Cumulative Production: " + str(cum_prod))
+    print("Prestige Points: " + str(float(prestige_points)))
+    print("Cumulative Money: " + str(stats.cumulative_income[-1]))
 
     # num_upgrades = opt.num_upgrades()
     # time_generator = GenerateUpgradeTimes(num_upgrades + 1)

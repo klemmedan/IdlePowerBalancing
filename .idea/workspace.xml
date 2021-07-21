@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="040b670b-eb1d-4aeb-b644-741d6438de9a" name="Default" comment="Have a good portion fairly balanced now with lots of bugs worked out.&#10;&#10;Roughly first 100 days or so go smoothly and should need to update balance sheet costs to finish up here.">
-      <change afterPath="$PROJECT_DIR$/GenerateUpgradeTimes.py" afterDir="false" />
+    <list default="true" id="040b670b-eb1d-4aeb-b644-741d6438de9a" name="Default" comment="Lots of worked out bugs and stuff I guess? Didn't commit earlier so not sure what changed exactly.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DataExport.py" beforeDir="false" afterPath="$PROJECT_DIR$/DataExport.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DynamicBalanceDataLoader.py" beforeDir="false" afterPath="$PROJECT_DIR$/DynamicBalanceDataLoader.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/DynamicBalancing.py" beforeDir="false" afterPath="$PROJECT_DIR$/DynamicBalancing.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GenerateUpgradeTimes.py" beforeDir="false" afterPath="$PROJECT_DIR$/GenerateUpgradeTimes.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/IdlePowerBalancing.xlsx" beforeDir="false" afterPath="$PROJECT_DIR$/IdlePowerBalancing.xlsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PlottingStuff.py" beforeDir="false" afterPath="$PROJECT_DIR$/PlottingStuff.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TestSpace.py" beforeDir="false" afterPath="$PROJECT_DIR$/TestSpace.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -111,12 +108,16 @@
       </pane>
     </panes>
   </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
   <component name="PropertiesComponent">
     <property name="SearchEverywhereHistoryKey" value="&#9;FILE&#9;file://C:/Users/Dan/Documents/GitHub/IdlePowerBalancing/GenerateUpgradeTimes.py" />
     <property name="last_opened_file_path" value="$USER_HOME$/PycharmProjects/sparkbalancing" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
   </component>
-  <component name="RunManager" selected="Python.DynamicBalancing">
+  <component name="RunManager" selected="Python.TestSpace">
     <configuration name="DataExport" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="IdlePowerBalancing" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -231,9 +232,9 @@
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.TestSpace" />
         <item itemvalue="Python.DynamicBalancing" />
         <item itemvalue="Python.DataExport" />
-        <item itemvalue="Python.TestSpace" />
         <item itemvalue="Python.GenerateUpgradeTimes" />
         <item itemvalue="Python.IdlePowerOptimization" />
       </list>
@@ -265,7 +266,14 @@
       <option name="project" value="LOCAL" />
       <updated>1599021600062</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="Lots of worked out bugs and stuff I guess? Didn't commit earlier so not sure what changed exactly.">
+      <created>1624936346507</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1624936346507</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -296,7 +304,8 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Got the dynamic balancer working and starting to get some values that seem to be working well. Decent progress rate for the first month of gameplay or so, so far." />
     <MESSAGE value="Have a good portion fairly balanced now with lots of bugs worked out.&#10;&#10;Roughly first 100 days or so go smoothly and should need to update balance sheet costs to finish up here." />
-    <option name="LAST_COMMIT_MESSAGE" value="Have a good portion fairly balanced now with lots of bugs worked out.&#10;&#10;Roughly first 100 days or so go smoothly and should need to update balance sheet costs to finish up here." />
+    <MESSAGE value="Lots of worked out bugs and stuff I guess? Didn't commit earlier so not sure what changed exactly." />
+    <option name="LAST_COMMIT_MESSAGE" value="Lots of worked out bugs and stuff I guess? Didn't commit earlier so not sure what changed exactly." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
